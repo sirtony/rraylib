@@ -1,0 +1,15 @@
+[package]
+name = "rraylib"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+
+[build-dependencies]
+anyhow = "1.0.95"
+bindgen = "0.71.1"
+cc = "1.2.6"
+chrono = "0.4.39"
+cmake = "0.1.52"
+reqwest = { version = "0.12.12", features = ["blocking"] }
+zip-extract = "0.2.1"
