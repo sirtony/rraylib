@@ -184,10 +184,11 @@ fn main() -> anyhow::Result<()> {
         config.define("OPENGL_ES_VERSION", "ES 2.0");
     }
 
-    config.build();
+    let out_dir = config.build();
 
     let search_dirs = vec!["lib64", "lib", "bin"];
     for search_dir in search_dirs {
+        let search_dir = out_dir.join(search_dir);
         println!(
             "cargo:rustc-link-search=native={}",
             raylib.out_dir().join(search_dir).display()
