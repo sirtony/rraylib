@@ -2,6 +2,8 @@ use crate::sys::*;
 use crate::{try_lock, Error, Result};
 use std::sync::{Mutex, MutexGuard};
 
+pub use crate::sys::{Camera2D, Camera3D, Color};
+
 pub struct Drawing<'a> {
     _guard: MutexGuard<'a, ()>,
     drawing: Mutex<()>,

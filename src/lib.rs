@@ -2,9 +2,15 @@ use std::ffi::CString;
 use std::sync::Mutex;
 use typed_builder::TypedBuilder;
 
+/// Monitor and Window handling.
 pub mod display;
+
+/// Drawing and rendering.
 pub mod graphics;
+
+/// Math functions and structures.
 pub mod math;
+
 /// Unsafe bindings to raylib, raymath, rlgl, raygui (if enabled), and Physac (if enabled).
 pub mod sys;
 
@@ -83,10 +89,13 @@ pub struct InitOptions {
     pub high_dpi: bool,
     #[builder(setter(strip_option), default = None)]
     pub target_fps: Option<u32>,
-
     #[cfg_attr(debug_assertions, builder(default = LogLevel::Debug))]
     #[cfg_attr(not(debug_assertions), builder(default = LogLevel::Warning))]
     pub log_level: LogLevel,
+    #[builder(setter(strip_option), default = None)]
+    pub max_width: Option<u32>,
+    #[builder(setter(strip_option), default = None)]
+    pub max_height: Option<u32>,
 }
 
 impl Default for InitOptions {
@@ -197,6 +206,11 @@ pub fn init(options: InitOptions) -> Result<Context> {
         if let Some(fps) = options.target_fps {
             set_target_fps(fps as i32);
         }
+
+        set_window_max_size(
+            options.max_width.unwrap_or(0) as i32,
+            options.max_height.unwrap_or(0) as i32,
+        )
     }
 
     Ok(Context {

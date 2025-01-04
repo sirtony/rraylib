@@ -2,6 +2,8 @@ use crate::sys::*;
 use std::ops::*;
 use std::ptr::addr_of_mut;
 
+pub use crate::sys::{Matrix, Rectangle, Vector2, Vector3, Vector4};
+
 impl Rectangle {
     pub const fn new(x: f32, y: f32, width: f32, height: f32) -> Self {
         Self {

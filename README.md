@@ -46,3 +46,27 @@ If you want to use this crate on a platform that is not officially supported, pu
 | `physac`        | Enables Physac support.                                         |
 | `sdl`           | Enables the SDL backend.                                        |
 | `external_glfw` | Use the system GLFW lib instead of the one bundled with raylib. |
+
+## Basic Usage
+
+```rust
+use rraylib::InitOptions;
+use rraylib::graphics::Color;
+
+fn main() -> anyhow::Result<()> {
+    let options = InitOptions::default();
+    let mut rl = rraylib::init(options)?;
+    let mut window = rl.window()?;
+
+    while !window.should_close() {
+        let mut ctx = rl.begin_drawing()?;
+
+        ctx.clear_background(Color::RAY_WHITE);
+        ctx.draw_fps(10, 10);
+    }
+
+    window.close()?;
+
+    Ok(())
+}
+```

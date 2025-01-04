@@ -194,16 +194,6 @@ impl<'a> Window<'a> {
         unsafe { set_window_size(size.x as i32, size.y as i32) }
     }
 
-    pub fn set_width(&mut self, width: u32) {
-        let (_, height) = self.size();
-        self.set_size(width, height);
-    }
-
-    pub fn set_height(&mut self, height: u32) {
-        let (width, _) = self.size();
-        self.set_size(width, height);
-    }
-
     pub fn opacity(&mut self, opacity: f32) {
         unsafe { set_window_opacity(opacity) }
     }
