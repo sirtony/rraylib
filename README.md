@@ -26,16 +26,17 @@ If you want to use this crate on a platform that is not officially supported, pu
 
 ## Features
 
-| Feature        | Description                           |
-|----------------|---------------------------------------|
-| `wayland`      | Use Wayland on Linux.                 |
-| `x11`          | Use X11 on Linux (default).           |
-| `opengl_43`    | Enables OpenGL 4.3 support.           |
-| `opengl_33`    | Enables OpenGL 3.3 support (default). |
-| `opengl_21`    | Enables OpenGL 2.1 support.           |
-| `opengl_11`    | Enables OpenGL 1.1 support.           |
-| `opengl_es_30` | Enables OpenGL ES 3.0 support.        |
-| `opengl_es_20` | Enables OpenGL ES 2.0 support.        |
-| `raygui`       | Enables raygui support.               |
-| `physac`       | Enables Physac support.               |
-| `sdl`          | Enables the SDL backend.              |
+| Feature         | Description                                                     |
+|-----------------|-----------------------------------------------------------------|
+| `wayland`       | Use Wayland on Linux.                                           |
+| `x11`           | Use X11 on Linux (default).                                     |
+| `opengl_43`     | Enables OpenGL 4.3 support.                                     |
+| `opengl_33`     | Enables OpenGL 3.3 support (default).                           |
+| `opengl_21`     | Enables OpenGL 2.1 support.                                     |
+| `opengl_11`     | Enables OpenGL 1.1 support.                                     |
+| `opengl_es_30`  | Enables OpenGL ES 3.0 support.                                  |
+| `opengl_es_20`  | Enables OpenGL ES 2.0 support.                                  |
+| `raygui`        | Enables raygui support.                                         |
+| `physac`        | Enables Physac support.                                         |
+| `sdl`           | Enables the SDL backend.                                        |
+| `external_glfw` | Use the system GLFW lib instead of the one bundled with raylib. |
