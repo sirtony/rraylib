@@ -43,6 +43,7 @@ impl RustyRenamer {
         ("TraceLogLevel", "LogLevel"),
         ("va_list", "VariadicList"),
         ("__builtin_va_list", "BuiltinVariadicList"),
+        ("KeyboardKey", "Key"),
     ];
 }
 
@@ -58,7 +59,9 @@ impl ParseCallbacks for RustyRenamer {
         // rename some specific edge cases
         match _item_info.name {
             "BeginMode2D" => Some("begin_mode_2d".to_string()),
+            "EndMode2D" => Some("end_mode_2d".to_string()),
             "BeginMode3D" => Some("begin_mode_3d".to_string()),
+            "EndMode3D" => Some("end_mode_3d".to_string()),
 
             x if x.contains("Vector") => {
                 let name = x.to_case(Case::Snake).replace("vector_", "vector");

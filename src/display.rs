@@ -1,7 +1,30 @@
 use crate::sys::*;
 use crate::Result;
+use paste::paste;
 use std::ffi::CStr;
 use std::sync::MutexGuard;
+
+macro_rules! window_flag {
+    ( $name:ident => $value:expr ) => {
+        paste! {
+            pub fn [<has_ $name _flag>](&self) -> bool {
+                self.has_flag(crate::sys::WindowFlags::$value)
+            }
+
+            pub fn [<set_ $name _flag>](&mut self, value: bool) {
+                if value {
+                    self.set_flag(crate::sys::WindowFlags::$value);
+                } else {
+                    self.clear_flag(crate::sys::WindowFlags::$value);
+                }
+            }
+
+            pub fn [<clear_ $name _flag>](&mut self) {
+                self.clear_flag(crate::sys::WindowFlags::$value);
+            }
+        }
+    };
+}
 
 pub struct Window<'a>(MutexGuard<'a, ()>);
 
@@ -50,6 +73,156 @@ impl<'a> Window<'a> {
 
     pub fn is_resized(&self) -> bool {
         unsafe { is_window_resized() }
+    }
+
+    pub fn has_flag(&self, flag: WindowFlags) -> bool {
+        unsafe { is_window_state(flag as u32) }
+    }
+
+    pub fn set_flag(&mut self, flag: WindowFlags) {
+        unsafe { set_window_state(flag as u32) }
+    }
+
+    pub fn clear_flag(&mut self, flag: WindowFlags) {
+        unsafe { clear_window_state(flag as u32) }
+    }
+
+    window_flag!( vsync => Vsync );
+    window_flag!( fullscreen => Fullscreen );
+    window_flag!( resizable => Resizable );
+    window_flag!( undecorated => Undecorated );
+    window_flag!( hidden => Hidden );
+    window_flag!( minimized => Minimized );
+    window_flag!( maximized => Maximized );
+    window_flag!( unfocused => Unfocused );
+    window_flag!( always_on_top => AlwaysOnTop );
+    window_flag!( always_run => AlwaysRun );
+    window_flag!( transparent => Transparent );
+    window_flag!( high_dpi => HighDPI );
+    window_flag!( mouse_passthrough => MousePassthrough );
+    window_flag!( borderless => Borderless );
+    window_flag!( msaa_4x => Msaa4X );
+    window_flag!( interlaced => Interlaced );
+
+    pub fn toggle_fullscreen(&mut self) {
+        unsafe { toggle_fullscreen() }
+    }
+
+    pub fn toggle_borderless(&mut self) {
+        unsafe { toggle_borderless_windowed() }
+    }
+
+    pub fn minimize(&mut self) {
+        unsafe { minimize_window() }
+    }
+
+    pub fn maximize(&mut self) {
+        unsafe { maximize_window() }
+    }
+
+    pub fn restore(&mut self) {
+        unsafe { restore_window() }
+    }
+
+    pub fn icon(&mut self, image: &Image) {
+        unsafe { set_window_icon(*image) }
+    }
+
+    pub fn icons(&mut self, images: impl AsRef<[Image]> + ExactSizeIterator) {
+        unsafe { set_window_icons(images.as_ref().as_ptr() as *mut Image, images.len() as i32) }
+    }
+
+    pub fn title(&mut self, title: impl AsRef<str>) -> Result<()> {
+        let title = std::ffi::CString::new(title.as_ref())?;
+        unsafe { set_window_title(title.as_ptr()) }
+        Ok(())
+    }
+
+    pub fn set_position(&mut self, x: i32, y: i32) {
+        unsafe { set_window_position(x, y) }
+    }
+
+    pub fn set_positionv(&mut self, pos: impl Into<Vector2>) {
+        let pos = pos.into();
+        unsafe { set_window_position(pos.x as i32, pos.y as i32) }
+    }
+
+    pub fn set_monitor(&mut self, monitor: &Monitor) {
+        unsafe { set_window_monitor(monitor.0 as i32) }
+    }
+
+    pub fn set_min_size(&mut self, width: u32, height: u32) {
+        unsafe { set_window_min_size(width as i32, height as i32) }
+    }
+
+    pub fn set_min_sizev(&mut self, size: impl Into<Vector2>) {
+        let size = size.into();
+        unsafe { set_window_min_size(size.x as i32, size.y as i32) }
+    }
+
+    pub fn set_min_width(&mut self, width: u32) {
+        self.set_min_size(width, 0);
+    }
+
+    pub fn set_min_height(&mut self, height: u32) {
+        self.set_min_size(0, height);
+    }
+
+    pub fn set_max_size(&mut self, width: u32, height: u32) {
+        unsafe { set_window_max_size(width as i32, height as i32) }
+    }
+
+    pub fn set_max_sizev(&mut self, size: impl Into<Vector2>) {
+        let size = size.into();
+        unsafe { set_window_max_size(size.x as i32, size.y as i32) }
+    }
+
+    pub fn set_max_width(&mut self, width: u32) {
+        self.set_max_size(width, 0);
+    }
+
+    pub fn set_max_height(&mut self, height: u32) {
+        self.set_max_size(0, height);
+    }
+
+    pub fn set_size(&mut self, width: u32, height: u32) {
+        unsafe { set_window_size(width as i32, height as i32) }
+    }
+
+    pub fn set_sizev(&mut self, size: impl Into<Vector2>) {
+        let size = size.into();
+        unsafe { set_window_size(size.x as i32, size.y as i32) }
+    }
+
+    pub fn set_width(&mut self, width: u32) {
+        let (_, height) = self.size();
+        self.set_size(width, height);
+    }
+
+    pub fn set_height(&mut self, height: u32) {
+        let (width, _) = self.size();
+        self.set_size(width, height);
+    }
+
+    pub fn opacity(&mut self, opacity: f32) {
+        unsafe { set_window_opacity(opacity) }
+    }
+
+    pub fn focus(&mut self) {
+        unsafe { set_window_focused() }
+    }
+
+    pub fn dpi(&self) -> Vector2 {
+        unsafe { get_window_scale_dpi() }
+    }
+
+    pub fn position(&self) -> (i32, i32) {
+        let vec = unsafe { get_window_position() };
+        (vec.x as i32, vec.y as i32)
+    }
+
+    pub fn positionv(&self) -> Vector2 {
+        unsafe { get_window_position() }
     }
 }
 

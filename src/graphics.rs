@@ -6,8 +6,6 @@ pub struct Drawing<'a> {
     _guard: MutexGuard<'a, ()>,
     drawing: Mutex<()>,
 }
-pub struct Drawing2D<'a>(MutexGuard<'a, ()>);
-pub struct Drawing3D<'a>(MutexGuard<'a, ()>);
 
 impl<'a> Drawing<'a> {
     pub(crate) fn new(guard: MutexGuard<'a, ()>, drawing: Mutex<()>) -> Self {
@@ -17,30 +15,64 @@ impl<'a> Drawing<'a> {
         }
     }
 
-    pub fn clear_background(&self, color: Color) {
+    pub fn clear_background(&mut self, color: Color) {
         unsafe { clear_background(color) }
     }
 
-    pub fn draw_fps(&self, x: i32, y: i32) {
+    pub fn draw_fps(&mut self, x: i32, y: i32) {
         unsafe { draw_fps(x, y) }
     }
 
-    pub fn begin_mode2d(&self, camera: &Camera2D) -> Result<Drawing2D> {
+    pub fn begin_mode2d(&mut self, camera: &Camera2D) -> Result<Drawing2D> {
         let guard = try_lock!(self.drawing).ok_or(Error::ThreadAlreadyLocked("drawing"))?;
         unsafe { begin_mode_2d(*camera) }
         Ok(Drawing2D(guard))
     }
 
-    pub fn begin_mode3d(&self, camera: &Camera3D) -> Result<Drawing3D> {
+    pub fn draw2d<F>(&mut self, camera: &Camera2D, f: F) -> Result<()>
+    where
+        F: FnOnce(&mut Drawing2D),
+    {
+        let mut ctx = self.begin_mode2d(camera)?;
+        f(&mut ctx);
+        Ok(())
+    }
+
+    pub fn begin_mode3d(&mut self, camera: &Camera3D) -> Result<Drawing3D> {
         let guard = try_lock!(self.drawing).ok_or(Error::ThreadAlreadyLocked("drawing"))?;
         unsafe { begin_mode_3d(*camera) }
         Ok(Drawing3D(guard))
+    }
+
+    pub fn draw3d<F>(&mut self, camera: &Camera3D, f: F) -> Result<()>
+    where
+        F: FnOnce(&mut Drawing3D),
+    {
+        let mut ctx = self.begin_mode3d(camera)?;
+        f(&mut ctx);
+        Ok(())
     }
 }
 
 impl<'a> Drop for Drawing<'a> {
     fn drop(&mut self) {
         unsafe { end_drawing() }
+    }
+}
+
+pub struct Drawing2D<'a>(MutexGuard<'a, ()>);
+
+impl Drop for Drawing2D<'_> {
+    fn drop(&mut self) {
+        unsafe { end_mode_2d() }
+    }
+}
+
+pub struct Drawing3D<'a>(MutexGuard<'a, ()>);
+
+impl Drop for Drawing3D<'_> {
+    fn drop(&mut self) {
+        unsafe { end_mode_3d() }
     }
 }
 
