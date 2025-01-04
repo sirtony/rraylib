@@ -54,6 +54,157 @@ impl<'a> Drawing<'a> {
         f(&mut ctx);
         Ok(())
     }
+
+    pub fn begin_texture_mode(&mut self, texture: &RenderTexture2D) -> Result<DrawingTexture> {
+        let guard = try_lock!(self.drawing).ok_or(Error::ThreadAlreadyLocked("drawing"))?;
+        unsafe { begin_texture_mode(*texture) }
+        Ok(DrawingTexture(guard))
+    }
+
+    pub fn draw_texture<F>(&mut self, texture: &RenderTexture2D, f: F) -> Result<()>
+    where
+        F: FnOnce(&mut DrawingTexture),
+    {
+        let mut ctx = self.begin_texture_mode(texture)?;
+        f(&mut ctx);
+        Ok(())
+    }
+
+    pub fn begin_shader_mode(&mut self, shader: &Shader) -> Result<DrawingShaded> {
+        let guard = try_lock!(self.drawing).ok_or(Error::ThreadAlreadyLocked("drawing"))?;
+        unsafe { begin_shader_mode(*shader) }
+        Ok(DrawingShaded(guard))
+    }
+
+    pub fn draw_shader<F>(&mut self, shader: &Shader, f: F) -> Result<()>
+    where
+        F: FnOnce(&mut DrawingShaded),
+    {
+        let mut ctx = self.begin_shader_mode(shader)?;
+        f(&mut ctx);
+        Ok(())
+    }
+
+    pub fn begin_blend_mode(&mut self, mode: BlendMode) -> Result<DrawingBlended> {
+        let guard = try_lock!(self.drawing).ok_or(Error::ThreadAlreadyLocked("drawing"))?;
+        unsafe { begin_blend_mode(mode as i32) }
+        Ok(DrawingBlended(guard))
+    }
+
+    pub fn draw_blend<F>(&mut self, mode: BlendMode, f: F) -> Result<()>
+    where
+        F: FnOnce(&mut DrawingBlended),
+    {
+        let mut ctx = self.begin_blend_mode(mode)?;
+        f(&mut ctx);
+        Ok(())
+    }
+
+    pub fn begin_viewport_mode(
+        &mut self,
+        x: i32,
+        y: i32,
+        width: i32,
+        height: i32,
+    ) -> Result<DrawingViewport> {
+        let guard = try_lock!(self.drawing).ok_or(Error::ThreadAlreadyLocked("drawing"))?;
+        unsafe { begin_scissor_mode(x, y, width, height) }
+        Ok(DrawingViewport(guard))
+    }
+
+    pub fn begin_viewport_mode_rect(&mut self, viewport: &Rectangle) -> Result<DrawingViewport> {
+        self.begin_viewport_mode(
+            viewport.x as i32,
+            viewport.y as i32,
+            viewport.width as i32,
+            viewport.height as i32,
+        )
+    }
+
+    pub fn begin_viewport_mode_vec4(&mut self, viewport: &Vector4) -> Result<DrawingViewport> {
+        self.begin_viewport_mode(
+            viewport.x as i32,
+            viewport.y as i32,
+            viewport.z as i32,
+            viewport.w as i32,
+        )
+    }
+
+    pub fn begin_viewport_mode_vec2(
+        &mut self,
+        location: &Vector2,
+        size: &Vector2,
+    ) -> Result<DrawingViewport> {
+        self.begin_viewport_mode(
+            location.x as i32,
+            location.y as i32,
+            size.x as i32,
+            size.y as i32,
+        )
+    }
+
+    pub fn draw_viewport<F>(&mut self, x: i32, y: i32, width: i32, height: i32, f: F) -> Result<()>
+    where
+        F: FnOnce(&mut DrawingViewport),
+    {
+        let mut ctx = self.begin_viewport_mode(x, y, width, height)?;
+        f(&mut ctx);
+        Ok(())
+    }
+
+    pub fn draw_viewport_rect<F>(&mut self, viewport: &Rectangle, f: F) -> Result<()>
+    where
+        F: FnOnce(&mut DrawingViewport),
+    {
+        self.draw_viewport(
+            viewport.x as i32,
+            viewport.y as i32,
+            viewport.width as i32,
+            viewport.height as i32,
+            f,
+        )
+    }
+
+    pub fn draw_viewport_vec4<F>(&mut self, viewport: &Vector4, f: F) -> Result<()>
+    where
+        F: FnOnce(&mut DrawingViewport),
+    {
+        self.draw_viewport(
+            viewport.x as i32,
+            viewport.y as i32,
+            viewport.z as i32,
+            viewport.w as i32,
+            f,
+        )
+    }
+
+    pub fn draw_viewport_vec2<F>(&mut self, location: &Vector2, size: &Vector2, f: F) -> Result<()>
+    where
+        F: FnOnce(&mut DrawingViewport),
+    {
+        self.draw_viewport(
+            location.x as i32,
+            location.y as i32,
+            size.x as i32,
+            size.y as i32,
+            f,
+        )
+    }
+
+    pub fn begin_vr_stereo_mode(&mut self, config: VrStereoConfig) -> Result<DrawingVr> {
+        let guard = try_lock!(self.drawing).ok_or(Error::ThreadAlreadyLocked("drawing"))?;
+        unsafe { begin_vr_stereo_mode(config) }
+        Ok(DrawingVr(guard))
+    }
+
+    pub fn draw_vr<F>(&mut self, config: VrStereoConfig, f: F) -> Result<()>
+    where
+        F: FnOnce(&mut DrawingVr),
+    {
+        let mut ctx = self.begin_vr_stereo_mode(config)?;
+        f(&mut ctx);
+        Ok(())
+    }
 }
 
 impl<'a> Drop for Drawing<'a> {
@@ -75,6 +226,46 @@ pub struct Drawing3D<'a>(MutexGuard<'a, ()>);
 impl Drop for Drawing3D<'_> {
     fn drop(&mut self) {
         unsafe { end_mode_3d() }
+    }
+}
+
+pub struct DrawingTexture<'a>(MutexGuard<'a, ()>);
+
+impl Drop for DrawingTexture<'_> {
+    fn drop(&mut self) {
+        unsafe { end_texture_mode() }
+    }
+}
+
+pub struct DrawingShaded<'a>(MutexGuard<'a, ()>);
+
+impl Drop for DrawingShaded<'_> {
+    fn drop(&mut self) {
+        unsafe { end_shader_mode() }
+    }
+}
+
+pub struct DrawingBlended<'a>(MutexGuard<'a, ()>);
+
+impl Drop for DrawingBlended<'_> {
+    fn drop(&mut self) {
+        unsafe { end_blend_mode() }
+    }
+}
+
+pub struct DrawingViewport<'a>(MutexGuard<'a, ()>);
+
+impl Drop for DrawingViewport<'_> {
+    fn drop(&mut self) {
+        unsafe { end_scissor_mode() }
+    }
+}
+
+pub struct DrawingVr<'a>(MutexGuard<'a, ()>);
+
+impl Drop for DrawingVr<'_> {
+    fn drop(&mut self) {
+        unsafe { end_vr_stereo_mode() }
     }
 }
 

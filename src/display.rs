@@ -214,6 +214,30 @@ impl<'a> Window<'a> {
     pub fn positionv(&self) -> Vector2 {
         unsafe { get_window_position() }
     }
+
+    pub fn show_cursor(&mut self) {
+        unsafe { show_cursor() }
+    }
+
+    pub fn hide_cursor(&mut self) {
+        unsafe { hide_cursor() }
+    }
+
+    pub fn is_cursor_hidden(&self) -> bool {
+        unsafe { is_cursor_hidden() }
+    }
+
+    pub fn unlock_cursor(&mut self) {
+        unsafe { enable_cursor() }
+    }
+
+    pub fn lock_cursor(&mut self) {
+        unsafe { disable_cursor() }
+    }
+
+    pub fn is_cursor_on_screen(&self) -> bool {
+        unsafe { is_cursor_on_screen() }
+    }
 }
 
 pub struct Monitor(pub u32);
