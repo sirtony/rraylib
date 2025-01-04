@@ -14,6 +14,7 @@ const USE_OPENGL_ES_20: bool = cfg!(feature = "opengl_es_20");
 const USE_GUI: bool = cfg!(feature = "raygui");
 const USE_PHYSAC: bool = cfg!(feature = "physac");
 const USE_SDL: bool = cfg!(feature = "sdl");
+const USE_EXTERNAL_GLFW: bool = cfg!(feature = "external_glfw");
 
 #[derive(Debug, Clone)]
 struct Package<'a> {
@@ -141,25 +142,11 @@ fn main() -> anyhow::Result<()> {
     config
         .define("BUILD_EXAMPLES", "OFF")
         .define("INCLUDE_EVERYTHING", "ON")
+        .define("OPENGL_VERSION", "OFF")
         .define(
             "CMAKE_BUILD_TYPE",
             if IS_DEBUG { "Debug" } else { "Release" },
         );
-
-    if USE_WAYLAND && !USE_X11 && !USE_SDL {
-        config.define("PLATFORM", "Desktop");
-        config.define("GLFW_BUILD_WAYLAND", "ON");
-    }
-
-    if USE_X11 && !USE_WAYLAND && !USE_SDL {
-        config.define("PLATFORM", "Desktop");
-        config.define("GLFW_BUILD_X11", "ON");
-    }
-
-    if USE_SDL && !USE_WAYLAND && !USE_X11 {
-        config.define("PLATFORM", "SDL");
-        config.define("USE_EXTERNAL_GLFW", "ON");
-    }
 
     if USE_OPENGL_43 {
         config.define("OPENGL_VERSION", "4.3");
@@ -183,6 +170,27 @@ fn main() -> anyhow::Result<()> {
 
     if USE_OPENGL_ES_20 {
         config.define("OPENGL_ES_VERSION", "ES 2.0");
+    }
+
+    if USE_WAYLAND && !USE_X11 && !USE_SDL {
+        config.define("PLATFORM", "Desktop");
+        config.define("GLFW_BUILD_WAYLAND", "ON");
+    }
+
+    if USE_X11 && !USE_WAYLAND && !USE_SDL {
+        config
+            .define("PLATFORM", "Desktop")
+            .define("GLFW_BUILD_X11", "ON");
+    }
+
+    if USE_SDL && !USE_WAYLAND && !USE_X11 {
+        config
+            .define("PLATFORM", "SDL")
+            .define("OPENGL_VERSION", "OFF");
+    }
+
+    if USE_EXTERNAL_GLFW {
+        config.define("USE_EXTERNAL_GLFW", "ON");
     }
 
     let out_dir = config.build();
