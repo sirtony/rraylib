@@ -10,7 +10,13 @@ Provides an all-in-one solution for using raylib in Rust in a way that is both s
 | [raygui](https://github.com/raysan5/raygui/releases/tag/4.0)     | v4.0    | Provides a set of simple GUI elements.                   |
 | [Physac](https://github.com/victorfisac/Physac/releases/tag/1.1) | v1.1    | Provides a 2D physics engine for raylib.                 |
 
+## Unsafe Bindings
+
 Unsafe bindings are provided by the `sys` module in this crate, and you may use raylib as you would in C if you prefer.
+
+The build script renames the automatically generated bindings ot be more idiomatic, so all functions, structs, enums, and constants are renamed to follow Rust's naming conventions.
+
+The `ConfigFlags` struct was also renamed to `WindowFlags` to be more clear about its purpose.
 
 ## Motivation
 
