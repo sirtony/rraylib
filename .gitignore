@@ -20,7 +20,12 @@ Cargo.lock
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
+# don't include the extra junk from the build process
 vendor/*.zip
 vendor/Physac-*
 vendor/raygui-*
 vendor/raylib-*
+
+# these get auto-generated on build
+src/sys.rs
+vendor/wrapper.h
