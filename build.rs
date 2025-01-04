@@ -1,3 +1,6 @@
+use bindgen::callbacks::{EnumVariantValue, ItemInfo, ItemKind, ParseCallbacks};
+use convert_case::{Case, Casing};
+use regex::Regex;
 use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -15,6 +18,102 @@ const USE_GUI: bool = cfg!(feature = "raygui");
 const USE_PHYSAC: bool = cfg!(feature = "physac");
 const USE_SDL: bool = cfg!(feature = "sdl");
 const USE_EXTERNAL_GLFW: bool = cfg!(feature = "external_glfw");
+
+#[derive(Debug, Clone)]
+struct RustyRenamer;
+
+impl RustyRenamer {
+    const PREFIXES: &'static [&'static str] = &[
+        "LOG_",
+        "FLAG_",
+        "KEY_",
+        "WINDOW_",
+        "MATERIAL_MAP_",
+        "SHADER_LOC_",
+        "SHADER_UNIFORM_",
+        "SHADER_ATTRIB_",
+        "PIXELFORMAT_",
+        "BLEND_",
+        "CAMERA_",
+        "NPATCH_",
+    ];
+    const SUFFIXES: &'static [&'static str] = &["_HINT", "_WINDOWED_MODE", "_MODE"];
+    const RENAMES: &'static [(&'static str, &'static str)] = &[
+        ("ConfigFlags", "WindowFlags"),
+        ("TraceLogLevel", "LogLevel"),
+        ("va_list", "VariadicList"),
+        ("__builtin_va_list", "BuiltinVariadicList"),
+    ];
+}
+
+impl ParseCallbacks for RustyRenamer {
+    fn generated_name_override(&self, _item_info: ItemInfo<'_>) -> Option<String> {
+        // don't rename functions starting with __
+        match _item_info.kind {
+            ItemKind::Function if _item_info.name.starts_with("__") => {
+                return None;
+            }
+            _ => {}
+        }
+        // rename some specific edge cases
+        match _item_info.name {
+            "BeginMode2D" => Some("begin_mode_2d".to_string()),
+            "BeginMode3D" => Some("begin_mode_3d".to_string()),
+
+            x if x.contains("Vector") => {
+                let name = x.to_case(Case::Snake).replace("vector_", "vector");
+                Some(name)
+            }
+
+            x => Some(x.to_case(Case::Snake)),
+        }
+    }
+    fn enum_variant_name(
+        &self,
+        _enum_name: Option<&str>,
+        _original_variant_name: &str,
+        _variant_value: EnumVariantValue,
+    ) -> Option<String> {
+        let mut name = _original_variant_name;
+
+        for prefix in Self::PREFIXES {
+            name = name.trim_start_matches(*prefix);
+        }
+
+        for suffix in Self::SUFFIXES {
+            name = name.trim_end_matches(*suffix);
+        }
+
+        // for the Key enum. Will be converted to PascalCase later
+        let name = name.replace("KP", "NUM_PAD");
+
+        // rename some specific edge cases
+        match name.as_str() {
+            "HIGHDPI" => Some("HighDPI".to_string()),
+            "TOPMOST" => Some("AlwaysOnTop".to_string()),
+
+            // convert the case and remove the enum name prefix, if any
+            x => Some(
+                x.to_case(Case::Pascal)
+                    .replace(_enum_name.unwrap_or(""), ""),
+            ),
+        }
+    }
+
+    fn item_name(&self, _original_item_name: &str) -> Option<String> {
+        if _original_item_name.starts_with("rl") {
+            return Some(_original_item_name.to_case(Case::Pascal).to_string());
+        }
+
+        for (original, renamed) in Self::RENAMES {
+            if _original_item_name == *original {
+                return Some(renamed.to_string());
+            }
+        }
+
+        None
+    }
+}
 
 #[derive(Debug, Clone)]
 struct Package<'a> {
@@ -118,18 +217,46 @@ fn main() -> anyhow::Result<()> {
     let mut file = File::create(&sys_path)?;
     let wrapper = dir.join(WRAPPER_C);
     let bindings = bindgen::Builder::default()
-        .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
+        .disable_header_comment()
         .rustified_enum(".+")
+        .parse_callbacks(Box::new(RustyRenamer))
         .clang_arg("-std=c99")
         .generate_inline_functions(true)
         .header(dir.join(WRAPPER_H).display().to_string())
-        .blocklist_item("FP_.+")
-        .blocklist_type("(true|false)_")
-        .blocklist_function("__bool.+")
+        .blocklist_function("^__.*")
+        .blocklist_item("^(FP|Fp).*")
+        .blocklist_item("^(true|false)_")
+        .blocklist_item("^__bool_.*")
+        .blocklist_type(r"_bindgen_ty_\d+")
+        .blocklist_type(r"^__[^bv].*")
+        .blocklist_type(r".*?_t$")
+        .blocklist_var("^(math|MATH)_.*")
+        .blocklist_var("^__glibc.*")
+        .blocklist_var(".*?_H$")
+        .blocklist_var("^__.*")
+        .disable_header_comment()
+        .layout_tests(false)
         .prepend_enum_name(false)
         .generate()?;
 
-    bindings.write(Box::new(&file))?;
+    let mut contents: Vec<u8> = Vec::new();
+    writeln!(contents, "#![allow(improper_ctypes)]")?;
+    bindings.write(Box::new(&mut contents))?;
+
+    let text = std::str::from_utf8(&contents)?;
+    let field_regex = Regex::new(r"pub ([A-Za-z]+): (.*?),")?;
+    let contents = field_regex.replace_all(&text, |caps: &regex::Captures| {
+        let field = caps.get(1).unwrap().as_str();
+        let ty = caps.get(2).unwrap().as_str();
+
+        if field.contains("type") {
+            format!("pub r#type: {},", ty)
+        } else {
+            format!("pub {}: {},", field.to_case(Case::Snake), ty)
+        }
+    });
+
+    file.write_all(contents.as_bytes())?;
     file.flush()?;
     std::mem::forget(file);
 

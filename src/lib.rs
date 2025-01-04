@@ -84,9 +84,9 @@ pub struct InitOptions {
     #[builder(setter(strip_option), default = None)]
     pub target_fps: Option<u32>,
 
-    #[cfg_attr(debug_assertions, builder(default = TraceLogLevel::LOG_DEBUG))]
-    #[cfg_attr(not(debug_assertions), builder(default = TraceLogLevel::LOG_WARNING))]
-    pub log_level: TraceLogLevel,
+    #[cfg_attr(debug_assertions, builder(default = LogLevel::Debug))]
+    #[cfg_attr(not(debug_assertions), builder(default = LogLevel::Warning))]
+    pub log_level: LogLevel,
 }
 
 impl Default for InitOptions {
@@ -122,7 +122,7 @@ pub struct Context {
 
 impl Context {
     pub fn window(&self) -> Result<Window> {
-        if !unsafe { IsWindowReady() } {
+        if !unsafe { is_window_ready() } {
             return Err(Error::SubsystemNotInitialized("window"));
         }
 
@@ -137,60 +137,65 @@ impl Context {
 }
 
 pub fn init(options: InitOptions) -> Result<Context> {
-    if unsafe { IsWindowReady() } {
+    if unsafe { is_window_ready() } {
         return Err(Error::SubsystemAlreadyInitialized("window"));
     }
 
     let title = CString::new(options.title.as_bytes())?;
-    let mut flags = 0;
+    let mut flags = Vec::new();
 
     if options.msaa {
-        flags |= ConfigFlags::FLAG_MSAA_4X_HINT as u32;
+        flags.push(WindowFlags::Msaa4X);
     }
 
     if options.vsync {
-        flags |= ConfigFlags::FLAG_VSYNC_HINT as u32;
+        flags.push(WindowFlags::Vsync);
     }
 
     if options.borderless {
-        flags |= ConfigFlags::FLAG_BORDERLESS_WINDOWED_MODE as u32;
+        flags.push(WindowFlags::Borderless);
     }
 
     if options.resizable {
-        flags |= ConfigFlags::FLAG_WINDOW_RESIZABLE as u32;
+        flags.push(WindowFlags::Resizable);
     }
 
     if !options.decorated {
-        flags |= ConfigFlags::FLAG_WINDOW_UNDECORATED as u32;
+        flags.push(WindowFlags::Undecorated);
     }
 
     if options.always_on_top {
-        flags |= ConfigFlags::FLAG_WINDOW_TOPMOST as u32;
+        flags.push(WindowFlags::AlwaysRun);
     }
 
     if options.fullscreen {
-        flags |= ConfigFlags::FLAG_FULLSCREEN_MODE as u32;
+        flags.push(WindowFlags::Fullscreen);
     }
 
     if options.minimized {
-        flags |= ConfigFlags::FLAG_WINDOW_MINIMIZED as u32;
+        flags.push(WindowFlags::Minimized);
     }
 
     if options.maximized {
-        flags |= ConfigFlags::FLAG_WINDOW_MAXIMIZED as u32;
+        flags.push(WindowFlags::Maximized);
     }
 
     if options.high_dpi {
-        flags |= ConfigFlags::FLAG_WINDOW_HIGHDPI as u32;
+        flags.push(WindowFlags::HighDPI);
     }
 
+    let flags = flags
+        .into_iter()
+        .map(move |x| x as u32)
+        .fold(0, |acc, x| acc | x);
+
     unsafe {
-        SetTraceLogLevel(options.log_level as i32);
-        SetConfigFlags(flags);
-        InitWindow(options.width as i32, options.height as i32, title.as_ptr());
+        set_trace_log_level(options.log_level as i32);
+        set_config_flags(flags);
+        init_window(options.width as i32, options.height as i32, title.as_ptr());
 
         if let Some(fps) = options.target_fps {
-            SetTargetFPS(fps as i32);
+            set_target_fps(fps as i32);
         }
     }
 

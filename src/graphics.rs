@@ -18,29 +18,29 @@ impl<'a> Drawing<'a> {
     }
 
     pub fn clear_background(&self, color: Color) {
-        unsafe { ClearBackground(color) }
+        unsafe { clear_background(color) }
     }
 
     pub fn draw_fps(&self, x: i32, y: i32) {
-        unsafe { DrawFPS(x, y) }
+        unsafe { draw_fps(x, y) }
     }
 
     pub fn begin_mode2d(&self, camera: &Camera2D) -> Result<Drawing2D> {
         let guard = try_lock!(self.drawing).ok_or(Error::ThreadAlreadyLocked("drawing"))?;
-        unsafe { BeginMode2D(*camera) }
+        unsafe { begin_mode_2d(*camera) }
         Ok(Drawing2D(guard))
     }
 
     pub fn begin_mode3d(&self, camera: &Camera3D) -> Result<Drawing3D> {
         let guard = try_lock!(self.drawing).ok_or(Error::ThreadAlreadyLocked("drawing"))?;
-        unsafe { BeginMode3D(*camera) }
+        unsafe { begin_mode_3d(*camera) }
         Ok(Drawing3D(guard))
     }
 }
 
 impl<'a> Drop for Drawing<'a> {
     fn drop(&mut self) {
-        unsafe { EndDrawing() }
+        unsafe { end_drawing() }
     }
 }
 
@@ -203,67 +203,67 @@ impl Color {
     };
 
     pub fn fade(&self, alpha: f32) -> Self {
-        unsafe { Fade(*self, alpha) }
+        unsafe { fade(*self, alpha) }
     }
 
     pub fn normalize(&self) -> Vector4 {
-        unsafe { ColorNormalize(*self) }
+        unsafe { color_normalize(*self) }
     }
 
     pub fn as_hsv(&self) -> Vector3 {
-        unsafe { ColorToHSV(*self) }
+        unsafe { color_to_hsv(*self) }
     }
 
     pub fn from_hsv(hsv: Vector3) -> Self {
-        unsafe { ColorFromHSV(hsv.x, hsv.y, hsv.z) }
+        unsafe { color_from_hsv(hsv.x, hsv.y, hsv.z) }
     }
 
     pub fn tint(&self, tint: &Color) -> Self {
-        unsafe { ColorTint(*self, *tint) }
+        unsafe { color_tint(*self, *tint) }
     }
 
     pub fn brightness(&self, factor: f32) -> Self {
-        unsafe { ColorBrightness(*self, factor) }
+        unsafe { color_brightness(*self, factor) }
     }
 
     pub fn contrast(&self, contrast: f32) -> Self {
-        unsafe { ColorContrast(*self, contrast) }
+        unsafe { color_contrast(*self, contrast) }
     }
 
     pub fn opacity(&self, alpha: f32) -> Self {
-        unsafe { ColorAlpha(*self, alpha) }
+        unsafe { color_alpha(*self, alpha) }
     }
 
     pub fn alpha_blend(&self, src: &Color, tint: &Color) -> Self {
-        unsafe { ColorAlphaBlend(*self, *src, *tint) }
+        unsafe { color_alpha_blend(*self, *src, *tint) }
     }
 
     pub fn lerp(&self, target: &Color, amount: f32) -> Self {
-        unsafe { ColorLerp(*self, *target, amount) }
+        unsafe { color_lerp(*self, *target, amount) }
     }
 }
 
 impl From<i32> for Color {
     fn from(color: i32) -> Self {
-        unsafe { GetColor(color as u32) }
+        unsafe { get_color(color as u32) }
     }
 }
 
 impl Into<i32> for Color {
     fn into(self) -> i32 {
-        unsafe { ColorToInt(self) }
+        unsafe { color_to_int(self) }
     }
 }
 
 impl From<u32> for Color {
     fn from(color: u32) -> Self {
-        unsafe { GetColor(color) }
+        unsafe { get_color(color) }
     }
 }
 
 impl Into<u32> for Color {
     fn into(self) -> u32 {
-        unsafe { ColorToInt(self) as u32 }
+        unsafe { color_to_int(self) as u32 }
     }
 }
 

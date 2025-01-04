@@ -2,6 +2,205 @@ use crate::sys::*;
 use std::ops::*;
 use std::ptr::addr_of_mut;
 
+impl Rectangle {
+    pub const fn new(x: f32, y: f32, width: f32, height: f32) -> Self {
+        Self {
+            x,
+            y,
+            width,
+            height,
+        }
+    }
+
+    pub fn top_left(&self) -> Vector2 {
+        Vector2::new(self.x, self.y)
+    }
+
+    pub fn top_right(&self) -> Vector2 {
+        Vector2::new(self.x + self.width, self.y)
+    }
+
+    pub fn bottom_left(&self) -> Vector2 {
+        Vector2::new(self.x, self.y + self.height)
+    }
+
+    pub fn bottom_right(&self) -> Vector2 {
+        Vector2::new(self.x + self.width, self.y + self.height)
+    }
+
+    pub fn growf(&mut self, amount: f32) {
+        self.x -= amount;
+        self.y -= amount;
+        self.width += amount * 2.0;
+        self.height += amount * 2.0;
+    }
+
+    pub fn grow(&mut self, amount: Vector2) {
+        self.x -= amount.x;
+        self.y -= amount.y;
+        self.width += amount.x * 2.0;
+        self.height += amount.y * 2.0;
+    }
+
+    pub fn shrinkf(&mut self, amount: f32) {
+        self.x += amount;
+        self.y += amount;
+        self.width -= amount * 2.0;
+        self.height -= amount * 2.0;
+    }
+
+    pub fn shrink(&mut self, amount: Vector2) {
+        self.x += amount.x;
+        self.y += amount.y;
+        self.width -= amount.x * 2.0;
+        self.height -= amount.y * 2.0;
+    }
+
+    pub fn move_by(&mut self, amount: Vector2) {
+        self.x += amount.x;
+        self.y += amount.y;
+    }
+
+    pub fn move_byf(&mut self, amount: f32) {
+        self.x += amount;
+        self.y += amount;
+    }
+
+    pub fn move_to(&mut self, position: Vector2) {
+        self.x = position.x;
+        self.y = position.y;
+    }
+
+    pub fn move_tof(&mut self, x: f32, y: f32) {
+        self.x = x;
+        self.y = y;
+    }
+
+    pub fn contains_point(&self, position: &Vector2) -> bool {
+        unsafe { check_collision_point_rec(*position, *self) }
+    }
+
+    pub fn contains_pointf(&self, x: f32, y: f32) -> bool {
+        unsafe { check_collision_point_rec(Vector2::new(x, y), *self) }
+    }
+
+    pub fn contains_rectangle(&self, other: &Rectangle) -> bool {
+        self.contains_point(&other.top_left())
+            && self.contains_point(&other.top_right())
+            && self.contains_point(&other.bottom_left())
+            && self.contains_point(&other.bottom_right())
+    }
+
+    pub fn collides_with(&self, other: &Rectangle) -> bool {
+        unsafe { check_collision_recs(*self, *other) }
+    }
+
+    pub fn collision_area(&self, other: &Rectangle) -> Rectangle {
+        unsafe { get_collision_rec(*self, *other) }
+    }
+}
+
+impl Eq for Rectangle {}
+impl PartialEq for Rectangle {
+    fn eq(&self, other: &Self) -> bool {
+        let (pos1, size1): (Vector2, Vector2) = (*self).into();
+        let (pos2, size2): (Vector2, Vector2) = (*other).into();
+
+        pos1 == pos2 && size1 == size2
+    }
+}
+
+impl From<(Vector2, Vector2)> for Rectangle {
+    fn from((position, size): (Vector2, Vector2)) -> Self {
+        Self {
+            x: position.x,
+            y: position.y,
+            width: size.x,
+            height: size.y,
+        }
+    }
+}
+
+impl Into<(Vector2, Vector2)> for Rectangle {
+    fn into(self) -> (Vector2, Vector2) {
+        (
+            Vector2::new(self.x, self.y),
+            Vector2::new(self.width, self.height),
+        )
+    }
+}
+
+impl From<[Vector2; 2]> for Rectangle {
+    fn from([position, size]: [Vector2; 2]) -> Self {
+        Self {
+            x: position.x,
+            y: position.y,
+            width: size.x,
+            height: size.y,
+        }
+    }
+}
+
+impl Into<[Vector2; 2]> for Rectangle {
+    fn into(self) -> [Vector2; 2] {
+        [
+            Vector2::new(self.x, self.y),
+            Vector2::new(self.width, self.height),
+        ]
+    }
+}
+
+impl From<(f32, f32, f32, f32)> for Rectangle {
+    fn from((x, y, width, height): (f32, f32, f32, f32)) -> Self {
+        Self {
+            x,
+            y,
+            width,
+            height,
+        }
+    }
+}
+
+impl Into<(f32, f32, f32, f32)> for Rectangle {
+    fn into(self) -> (f32, f32, f32, f32) {
+        (self.x, self.y, self.width, self.height)
+    }
+}
+
+impl From<[f32; 4]> for Rectangle {
+    fn from([x, y, width, height]: [f32; 4]) -> Self {
+        Self {
+            x,
+            y,
+            width,
+            height,
+        }
+    }
+}
+
+impl Into<[f32; 4]> for Rectangle {
+    fn into(self) -> [f32; 4] {
+        [self.x, self.y, self.width, self.height]
+    }
+}
+
+impl From<Vector4> for Rectangle {
+    fn from(v: Vector4) -> Self {
+        Self {
+            x: v.x,
+            y: v.y,
+            width: v.z,
+            height: v.w,
+        }
+    }
+}
+
+impl Into<Vector4> for Rectangle {
+    fn into(self) -> Vector4 {
+        Vector4::new(self.x, self.y, self.width, self.height)
+    }
+}
+
 impl Vector2 {
     pub const ZERO: Self = Self { x: 0.0, y: 0.0 };
     pub const ONE: Self = Self { x: 1.0, y: 1.0 };
@@ -11,15 +210,15 @@ impl Vector2 {
     }
 
     pub fn addf(&mut self, value: f32) {
-        *self = unsafe { Vector2AddValue(*self, value) }
+        *self = unsafe { vector2_add_value(*self, value) }
     }
 
     pub fn subf(&mut self, value: f32) {
-        *self = unsafe { Vector2SubtractValue(*self, value) }
+        *self = unsafe { vector2_subtract_value(*self, value) }
     }
 
     pub fn scale(&mut self, value: f32) {
-        *self = unsafe { Vector2Scale(*self, value) }
+        *self = unsafe { vector2_scale(*self, value) }
     }
 
     pub fn abs(&self) -> Self {
@@ -30,70 +229,70 @@ impl Vector2 {
     }
 
     pub fn len(&self) -> f32 {
-        unsafe { Vector2Length(*self) }
+        unsafe { vector2_length(*self) }
     }
 
     pub fn len_squared(&self) -> f32 {
-        unsafe { Vector2LengthSqr(*self) }
+        unsafe { vector2_length_sqr(*self) }
     }
 
     pub fn dot(&self, other: &Vector2) -> f32 {
-        unsafe { Vector2DotProduct(*self, *other) }
+        unsafe { vector2_dot_product(*self, *other) }
     }
 
     pub fn distance(&self, other: &Vector2) -> f32 {
-        unsafe { Vector2Distance(*self, *other) }
+        unsafe { vector2_distance(*self, *other) }
     }
 
     pub fn distance_squared(&self, other: &Vector2) -> f32 {
-        unsafe { Vector2DistanceSqr(*self, *other) }
+        unsafe { vector2_distance_sqr(*self, *other) }
     }
 
     pub fn angle(&self, other: &Vector2) -> f32 {
-        unsafe { Vector2Angle(*self, *other) }
+        unsafe { vector2_angle(*self, *other) }
     }
 
     pub fn normalize(&self) -> Self {
-        unsafe { Vector2Normalize(*self) }
+        unsafe { vector2_normalize(*self) }
     }
 
     pub fn transform(&self, mat: &Matrix) -> Self {
-        unsafe { Vector2Transform(*self, *mat) }
+        unsafe { vector2_transform(*self, *mat) }
     }
 
     pub fn lerp(&self, target: &Vector2, amount: f32) -> Self {
-        unsafe { Vector2Lerp(*self, *target, amount) }
+        unsafe { vector2_lerp(*self, *target, amount) }
     }
 
     pub fn reflect(&self, normal: &Vector2) -> Self {
-        unsafe { Vector2Reflect(*self, *normal) }
+        unsafe { vector2_reflect(*self, *normal) }
     }
 
     pub fn rotate(&self, degs: f32) -> Self {
-        unsafe { Vector2Rotate(*self, degs) }
+        unsafe { vector2_rotate(*self, degs) }
     }
 
     pub fn move_towards(&self, target: &Vector2, max_distance: f32) -> Self {
-        unsafe { Vector2MoveTowards(*self, *target, max_distance) }
+        unsafe { vector2_move_towards(*self, *target, max_distance) }
     }
 
     pub fn invert(&self) -> Self {
-        unsafe { Vector2Invert(*self) }
+        unsafe { vector2_invert(*self) }
     }
 
     pub fn clamp(&self, min: &Vector2, max: &Vector2) -> Self {
-        unsafe { Vector2Clamp(*self, *min, *max) }
+        unsafe { vector2_clamp(*self, *min, *max) }
     }
 
     pub fn clampf(&self, min: f32, max: f32) -> Self {
-        unsafe { Vector2ClampValue(*self, min, max) }
+        unsafe { vector2_clamp_value(*self, min, max) }
     }
 }
 
 impl Eq for Vector2 {}
 impl PartialEq for Vector2 {
     fn eq(&self, other: &Self) -> bool {
-        unsafe { Vector2Equals(*self, *other) == 1 }
+        unsafe { vector2_equals(*self, *other) == 1 }
     }
 }
 
@@ -110,7 +309,7 @@ impl Add for Vector2 {
     type Output = Self;
 
     fn add(self, rhs: Self) -> Self {
-        unsafe { Vector2Add(self, rhs) }
+        unsafe { vector2_add(self, rhs) }
     }
 }
 
@@ -124,7 +323,7 @@ impl Sub for Vector2 {
     type Output = Self;
 
     fn sub(self, rhs: Self) -> Self {
-        unsafe { Vector2Subtract(self, rhs) }
+        unsafe { vector2_subtract(self, rhs) }
     }
 }
 
@@ -138,7 +337,7 @@ impl Mul for Vector2 {
     type Output = Self;
 
     fn mul(self, rhs: Self) -> Self {
-        unsafe { Vector2Multiply(self, rhs) }
+        unsafe { vector2_multiply(self, rhs) }
     }
 }
 
@@ -152,7 +351,7 @@ impl Div for Vector2 {
     type Output = Self;
 
     fn div(self, rhs: Self) -> Self {
-        unsafe { Vector2Divide(self, rhs) }
+        unsafe { vector2_divide(self, rhs) }
     }
 }
 
@@ -166,7 +365,7 @@ impl Neg for Vector2 {
     type Output = Self;
 
     fn neg(self) -> Self {
-        unsafe { Vector2Negate(self) }
+        unsafe { vector2_negate(self) }
     }
 }
 
@@ -211,110 +410,110 @@ impl Vector3 {
     }
 
     pub fn addf(&mut self, value: f32) {
-        *self = unsafe { Vector3AddValue(*self, value) }
+        *self = unsafe { vector3_add_value(*self, value) }
     }
 
     pub fn subf(&mut self, value: f32) {
-        *self = unsafe { Vector3SubtractValue(*self, value) }
+        *self = unsafe { vector3_subtract_value(*self, value) }
     }
 
     pub fn scale(&mut self, value: f32) {
-        *self = unsafe { Vector3Scale(*self, value) }
+        *self = unsafe { vector3_scale(*self, value) }
     }
 
     pub fn cross(&self, other: &Vector3) -> Self {
-        unsafe { Vector3CrossProduct(*self, *other) }
+        unsafe { vector3_cross_product(*self, *other) }
     }
 
     pub fn perp(&self) -> Self {
-        unsafe { Vector3Perpendicular(*self) }
+        unsafe { vector3_perpendicular(*self) }
     }
 
     pub fn len(&self) -> f32 {
-        unsafe { Vector3Length(*self) }
+        unsafe { vector3_length(*self) }
     }
 
     pub fn len_squared(&self) -> f32 {
-        unsafe { Vector3LengthSqr(*self) }
+        unsafe { vector3_length_sqr(*self) }
     }
 
     pub fn dot(&self, other: &Vector3) -> f32 {
-        unsafe { Vector3DotProduct(*self, *other) }
+        unsafe { vector3_dot_product(*self, *other) }
     }
 
     pub fn distance(&self, other: &Vector3) -> f32 {
-        unsafe { Vector3Distance(*self, *other) }
+        unsafe { vector3_distance(*self, *other) }
     }
 
     pub fn distance_squared(&self, other: &Vector3) -> f32 {
-        unsafe { Vector3DistanceSqr(*self, *other) }
+        unsafe { vector3_distance_sqr(*self, *other) }
     }
 
     pub fn angle(&self, other: &Vector3) -> f32 {
-        unsafe { Vector3Angle(*self, *other) }
+        unsafe { vector3_angle(*self, *other) }
     }
 
     pub fn normalize(&self) -> Self {
-        unsafe { Vector3Normalize(*self) }
+        unsafe { vector3_normalize(*self) }
     }
 
     pub fn transform(&self, mat: &Matrix) -> Self {
-        unsafe { Vector3Transform(*self, *mat) }
+        unsafe { vector3_transform(*self, *mat) }
     }
 
     pub fn quat_rotate(&self, q: &Quaternion) -> Self {
-        unsafe { Vector3RotateByQuaternion(*self, *q) }
+        unsafe { vector3_rotate_by_quaternion(*self, *q) }
     }
 
     pub fn rotate(&self, axis: &Vector3, degs: f32) -> Self {
-        unsafe { Vector3RotateByAxisAngle(*self, *axis, degs) }
+        unsafe { vector3_rotate_by_axis_angle(*self, *axis, degs) }
     }
 
     pub fn lerp(&self, target: &Vector3, amount: f32) -> Self {
-        unsafe { Vector3Lerp(*self, *target, amount) }
+        unsafe { vector3_lerp(*self, *target, amount) }
     }
 
     pub fn reflect(&self, normal: &Vector3) -> Self {
-        unsafe { Vector3Reflect(*self, *normal) }
+        unsafe { vector3_reflect(*self, *normal) }
     }
 
     pub fn min(&self, other: &Vector3) -> Self {
-        unsafe { Vector3Min(*self, *other) }
+        unsafe { vector3_min(*self, *other) }
     }
 
     pub fn max(&self, other: &Vector3) -> Self {
-        unsafe { Vector3Max(*self, *other) }
+        unsafe { vector3_max(*self, *other) }
     }
 
     pub fn barycenter(&self, i: &Vector3, j: &Vector3, k: &Vector3) -> Self {
-        unsafe { Vector3Barycenter(*self, *i, *j, *k) }
+        unsafe { vector3_barycenter(*self, *i, *j, *k) }
     }
 
     pub fn unproject(&self, proj: &Matrix, view: &Matrix) -> Self {
-        unsafe { Vector3Unproject(*self, *proj, *view) }
+        unsafe { vector3_unproject(*self, *proj, *view) }
     }
 
     pub fn invert(&self) -> Self {
-        unsafe { Vector3Invert(*self) }
+        unsafe { vector3_invert(*self) }
     }
 
     pub fn clamp(&self, min: &Vector3, max: &Vector3) -> Self {
-        unsafe { Vector3Clamp(*self, *min, *max) }
+        unsafe { vector3_clamp(*self, *min, *max) }
     }
 
     pub fn clampf(&self, min: f32, max: f32) -> Self {
-        unsafe { Vector3ClampValue(*self, min, max) }
+        unsafe { vector3_clamp_value(*self, min, max) }
     }
 
     pub fn refract(&self, normal: &Vector3, ior: f32) -> Self {
-        unsafe { Vector3Refract(*self, *normal, ior) }
+        unsafe { vector3_refract(*self, *normal, ior) }
     }
 }
 
 impl Eq for Vector3 {}
 impl PartialEq for Vector3 {
     fn eq(&self, other: &Self) -> bool {
-        unsafe { Vector3Equals(*self, *other) == 1 }
+        unsafe { vector3_equals(*self, *other) == 1 }
     }
 }
 
@@ -331,7 +530,7 @@ impl Add for Vector3 {
     type Output = Self;
 
     fn add(self, rhs: Self) -> Self {
-        unsafe { Vector3Add(self, rhs) }
+        unsafe { vector3_add(self, rhs) }
     }
 }
 
@@ -345,7 +544,7 @@ impl Sub for Vector3 {
     type Output = Self;
 
     fn sub(self, rhs: Self) -> Self {
-        unsafe { Vector3Subtract(self, rhs) }
+        unsafe { vector3_subtract(self, rhs) }
     }
 }
 
@@ -359,7 +558,7 @@ impl Mul for Vector3 {
     type Output = Self;
 
     fn mul(self, rhs: Self) -> Self {
-        unsafe { Vector3Multiply(self, rhs) }
+        unsafe { vector3_multiply(self, rhs) }
     }
 }
 
@@ -373,7 +572,7 @@ impl Div for Vector3 {
     type Output = Self;
 
     fn div(self, rhs: Self) -> Self {
-        unsafe { Vector3Divide(self, rhs) }
+        unsafe { vector3_divide(self, rhs) }
     }
 }
 
@@ -387,7 +586,7 @@ impl Neg for Vector3 {
     type Output = Self;
 
     fn neg(self) -> Self {
-        unsafe { Vector3Negate(self) }
+        unsafe { vector3_negate(self) }
     }
 }
 
@@ -434,82 +633,82 @@ impl Vector4 {
     }
 
     pub fn from_axis_angle(axis: &Vector3, angle: f32) -> Self {
-        unsafe { QuaternionFromAxisAngle(*axis, angle) }
+        unsafe { quaternion_from_axis_angle(*axis, angle) }
     }
 
     pub fn identity() -> Self {
-        unsafe { QuaternionIdentity() }
+        unsafe { quaternion_identity() }
     }
 
     pub fn addf(&mut self, value: f32) {
-        *self = unsafe { Vector4AddValue(*self, value) }
+        *self = unsafe { vector4_add_value(*self, value) }
     }
 
     pub fn subf(&mut self, value: f32) {
-        *self = unsafe { Vector4SubtractValue(*self, value) }
+        *self = unsafe { vector4_subtract_value(*self, value) }
     }
 
     pub fn scale(&mut self, value: f32) {
-        *self = unsafe { Vector4Scale(*self, value) }
+        *self = unsafe { vector4_scale(*self, value) }
     }
 
     pub fn len(&self) -> f32 {
-        unsafe { Vector4Length(*self) }
+        unsafe { vector4_length(*self) }
     }
 
     pub fn len_squared(&self) -> f32 {
-        unsafe { Vector4LengthSqr(*self) }
+        unsafe { vector4_length_sqr(*self) }
     }
 
     pub fn normalize(&self) -> Self {
-        unsafe { Vector4Normalize(*self) }
+        unsafe { vector4_normalize(*self) }
     }
 
     pub fn dot(&self, other: &Vector4) -> f32 {
-        unsafe { Vector4DotProduct(*self, *other) }
+        unsafe { vector4_dot_product(*self, *other) }
     }
 
     pub fn lerp(&self, target: &Vector4, amount: f32) -> Self {
-        unsafe { Vector4Lerp(*self, *target, amount) }
+        unsafe { vector4_lerp(*self, *target, amount) }
     }
 
     pub fn nlerp(&self, target: &Vector4, amount: f32) -> Self {
-        unsafe { QuaternionNlerp(*self, *target, amount) }
+        unsafe { quaternion_nlerp(*self, *target, amount) }
     }
 
     pub fn slerp(&self, target: &Vector4, amount: f32) -> Self {
-        unsafe { QuaternionSlerp(*self, *target, amount) }
+        unsafe { quaternion_slerp(*self, *target, amount) }
     }
 
     pub fn invert(&self) -> Self {
-        unsafe { Vector4Invert(*self) }
+        unsafe { vector4_invert(*self) }
     }
 
     pub fn move_towards(&self, target: &Vector4, max_distance: f32) -> Self {
-        unsafe { Vector4MoveTowards(*self, *target, max_distance) }
+        unsafe { vector4_move_towards(*self, *target, max_distance) }
     }
 
     pub fn distance(&self, other: &Vector4) -> f32 {
-        unsafe { Vector4Distance(*self, *other) }
+        unsafe { vector4_distance(*self, *other) }
     }
 
     pub fn min(&self, other: &Vector4) -> Self {
-        unsafe { Vector4Min(*self, *other) }
+        unsafe { vector4_min(*self, *other) }
     }
 
     pub fn max(&self, other: &Vector4) -> Self {
-        unsafe { Vector4Max(*self, *other) }
+        unsafe { vector4_max(*self, *other) }
     }
 
     pub fn transform(&self, mat: &Matrix) -> Self {
-        unsafe { QuaternionTransform(*self, *mat) }
+        unsafe { quaternion_transform(*self, *mat) }
     }
 }
 
 impl Eq for Vector4 {}
 impl PartialEq for Vector4 {
     fn eq(&self, other: &Self) -> bool {
-        unsafe { Vector4Equals(*self, *other) == 1 }
+        unsafe { vector4_equals(*self, *other) == 1 }
     }
 }
 
@@ -526,7 +725,7 @@ impl Add for Vector4 {
     type Output = Self;
 
     fn add(self, rhs: Self) -> Self {
-        unsafe { Vector4Add(self, rhs) }
+        unsafe { vector4_add(self, rhs) }
     }
 }
 
@@ -540,7 +739,7 @@ impl Sub for Vector4 {
     type Output = Self;
 
     fn sub(self, rhs: Self) -> Self {
-        unsafe { Vector4Subtract(self, rhs) }
+        unsafe { vector4_subtract(self, rhs) }
     }
 }
 
@@ -554,7 +753,7 @@ impl Mul for Vector4 {
     type Output = Self;
 
     fn mul(self, rhs: Self) -> Self {
-        unsafe { Vector4Multiply(self, rhs) }
+        unsafe { vector4_multiply(self, rhs) }
     }
 }
 
@@ -568,7 +767,7 @@ impl Div for Vector4 {
     type Output = Self;
 
     fn div(self, rhs: Self) -> Self {
-        unsafe { Vector4Divide(self, rhs) }
+        unsafe { vector4_divide(self, rhs) }
     }
 }
 
@@ -582,31 +781,31 @@ impl Neg for Vector4 {
     type Output = Self;
 
     fn neg(self) -> Self {
-        unsafe { Vector4Negate(self) }
+        unsafe { vector4_negate(self) }
     }
 }
 
 impl Into<Vector3> for Vector4 {
     fn into(self) -> Vector3 {
-        unsafe { QuaternionToEuler(self) }
+        unsafe { quaternion_to_euler(self) }
     }
 }
 
 impl From<(Vector3, Vector3)> for Vector4 {
     fn from((from, to): (Vector3, Vector3)) -> Self {
-        unsafe { QuaternionFromVector3ToVector3(from, to) }
+        unsafe { quaternion_from_vector3_to_vector3(from, to) }
     }
 }
 
 impl From<[Vector3; 2]> for Vector4 {
     fn from([from, to]: [Vector3; 2]) -> Self {
-        unsafe { QuaternionFromVector3ToVector3(from, to) }
+        unsafe { quaternion_from_vector3_to_vector3(from, to) }
     }
 }
 
 impl Into<Matrix> for Vector4 {
     fn into(self) -> Matrix {
-        unsafe { QuaternionToMatrix(self) }
+        unsafe { quaternion_to_matrix(self) }
     }
 }
 
@@ -614,7 +813,7 @@ impl Into<(Vector3, f32)> for Vector4 {
     fn into(self) -> (Vector3, f32) {
         let mut axis = Vector3::ZERO;
         let mut angle = 0.0;
-        unsafe { QuaternionToAxisAngle(self, addr_of_mut!(axis), addr_of_mut!(angle)) }
+        unsafe { quaternion_to_axis_angle(self, addr_of_mut!(axis), addr_of_mut!(angle)) }
 
         (axis, angle)
     }
@@ -622,7 +821,7 @@ impl Into<(Vector3, f32)> for Vector4 {
 
 impl From<(Vector3, f32)> for Vector4 {
     fn from((axis, angle): (Vector3, f32)) -> Self {
-        unsafe { QuaternionFromAxisAngle(axis, angle) }
+        unsafe { quaternion_from_axis_angle(axis, angle) }
     }
 }
 
@@ -673,59 +872,59 @@ impl Matrix {
     };
 
     pub fn determinant(&self) -> f32 {
-        unsafe { MatrixDeterminant(*self) }
+        unsafe { matrix_determinant(*self) }
     }
 
     pub fn trace(&self) -> f32 {
-        unsafe { MatrixTrace(*self) }
+        unsafe { matrix_trace(*self) }
     }
 
     pub fn transpose(&self) -> Self {
-        unsafe { MatrixTranspose(*self) }
+        unsafe { matrix_transpose(*self) }
     }
 
     pub fn invert(&self) -> Self {
-        unsafe { MatrixInvert(*self) }
+        unsafe { matrix_invert(*self) }
     }
 
     pub fn rotate_x(degs: f32) -> Self {
-        unsafe { MatrixRotateX(degs) }
+        unsafe { matrix_rotate_x(degs) }
     }
 
     pub fn rotate_y(degs: f32) -> Self {
-        unsafe { MatrixRotateY(degs) }
+        unsafe { matrix_rotate_y(degs) }
     }
 
     pub fn rotate_z(degs: f32) -> Self {
-        unsafe { MatrixRotateZ(degs) }
+        unsafe { matrix_rotate_z(degs) }
     }
 
     pub fn rotate_xyz(angles: &Vector3) -> Self {
-        unsafe { MatrixRotateXYZ(*angles) }
+        unsafe { matrix_rotate_xyz(*angles) }
     }
 
     pub fn rotate_zyx(angles: &Vector3) -> Self {
-        unsafe { MatrixRotateZYX(*angles) }
+        unsafe { matrix_rotate_zyx(*angles) }
     }
 
     pub fn scale(x: f32, y: f32, z: f32) -> Self {
-        unsafe { MatrixScale(x, y, z) }
+        unsafe { matrix_scale(x, y, z) }
     }
 
     pub fn frustum(left: f64, right: f64, bottom: f64, top: f64, near: f64, far: f64) -> Self {
-        unsafe { MatrixFrustum(left, right, bottom, top, near, far) }
+        unsafe { matrix_frustum(left, right, bottom, top, near, far) }
     }
 
     pub fn perspective(fovy: f64, aspect: f64, near: f64, far: f64) -> Self {
-        unsafe { MatrixPerspective(fovy, aspect, near, far) }
+        unsafe { matrix_perspective(fovy, aspect, near, far) }
     }
 
     pub fn ortho(left: f64, right: f64, bottom: f64, top: f64, near: f64, far: f64) -> Self {
-        unsafe { MatrixOrtho(left, right, bottom, top, near, far) }
+        unsafe { matrix_ortho(left, right, bottom, top, near, far) }
     }
 
     pub fn look_at(eye: &Vector3, target: &Vector3, up: &Vector3) -> Self {
-        unsafe { MatrixLookAt(*eye, *target, *up) }
+        unsafe { matrix_look_at(*eye, *target, *up) }
     }
 }
 
@@ -746,7 +945,7 @@ impl Add for Matrix {
     type Output = Self;
 
     fn add(self, rhs: Self) -> Self {
-        unsafe { MatrixAdd(self, rhs) }
+        unsafe { matrix_add(self, rhs) }
     }
 }
 
@@ -760,7 +959,7 @@ impl Sub for Matrix {
     type Output = Self;
 
     fn sub(self, rhs: Self) -> Self {
-        unsafe { MatrixSubtract(self, rhs) }
+        unsafe { matrix_subtract(self, rhs) }
     }
 }
 
@@ -774,7 +973,7 @@ impl Mul for Matrix {
     type Output = Self;
 
     fn mul(self, rhs: Self) -> Self {
-        unsafe { MatrixMultiply(self, rhs) }
+        unsafe { matrix_multiply(self, rhs) }
     }
 }
 
@@ -786,25 +985,25 @@ impl MulAssign for Matrix {
 
 impl From<Vector3> for Matrix {
     fn from(v: Vector3) -> Self {
-        unsafe { MatrixTranslate(v.x, v.y, v.z) }
+        unsafe { matrix_translate(v.x, v.y, v.z) }
     }
 }
 
 impl From<(f32, f32, f32)> for Matrix {
     fn from((x, y, z): (f32, f32, f32)) -> Self {
-        unsafe { MatrixTranslate(x, y, z) }
+        unsafe { matrix_translate(x, y, z) }
     }
 }
 
 impl From<[f32; 3]> for Matrix {
     fn from([x, y, z]: [f32; 3]) -> Self {
-        unsafe { MatrixTranslate(x, y, z) }
+        unsafe { matrix_translate(x, y, z) }
     }
 }
 
 impl From<(Vector3, f32)> for Matrix {
     fn from((axis, angle): (Vector3, f32)) -> Self {
-        unsafe { MatrixRotate(axis, angle) }
+        unsafe { matrix_rotate(axis, angle) }
     }
 }
 

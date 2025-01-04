@@ -12,6 +12,8 @@ anyhow = "1.0.95"
 bindgen = "0.71.1"
 cc = "1.2.6"
 cmake = "0.1.52"
+convert_case = "0.6.0"
+regex = "1.11.1"
 reqwest = { version = "0.12.12", features = ["blocking"] }
 zip-extract = "0.2.1"
 
