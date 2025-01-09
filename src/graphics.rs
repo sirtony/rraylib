@@ -352,6 +352,64 @@ crate::utils::newtype!(Texture2D, unload_texture);
 crate::utils::newtype!(RenderTexture2D, unload_render_texture);
 crate::utils::newtype!(Font, unload_font);
 
+impl RenderTexture2D {
+    pub fn new(width: u32, height: u32) -> Result<Self> {
+        let tex = unsafe { load_render_texture(width as i32, height as i32) };
+        let ptr = addr_of!(tex);
+        if !unsafe { is_render_texture_valid(ptr.read()) } {
+            return Err(Error::UnableToLoad("render texture"));
+        }
+        Ok(Self(tex))
+    }
+}
+
+impl Texture2D {
+    pub fn from_file(file_name: impl AsRef<Path>) -> Result<Self> {
+        let file_name = file_name.as_ref().as_os_str().as_encoded_bytes();
+        let file_name = CString::new(file_name)?;
+        let tex = unsafe { load_texture(file_name.as_ptr()) };
+        let ptr = addr_of!(tex);
+        if !unsafe { is_texture_valid(ptr.read()) } {
+            return Err(Error::UnableToLoad("texture"));
+        }
+        Ok(Self(tex))
+    }
+
+    pub fn from_cubemap(img: &Image, layout: CubemapLayout) -> Result<Self> {
+        let tex = unsafe { load_texture_cubemap(img.as_raw(), layout as i32) };
+        let ptr = addr_of!(tex);
+
+        if !unsafe { is_texture_valid(ptr.read()) } {
+            return Err(Error::UnableToLoad("texture"));
+        }
+        Ok(Self(tex))
+    }
+
+    pub fn update(&mut self, pixels: impl AsRef<[u8]>) {
+        let data = pixels.as_ref();
+        unsafe { update_texture(self.as_raw(), data.as_ptr() as *const c_void) }
+    }
+
+    pub fn update_ex(&mut self, rec: impl Into<Rectangle>, pixels: impl AsRef<[u8]>) {
+        let rec = rec.into();
+        let data = pixels.as_ref();
+        unsafe { update_texture_rec(self.as_raw(), rec.into(), data.as_ptr() as *const c_void) }
+    }
+
+    pub fn compute_mipmaps(&mut self) {
+        let ptr = addr_of_mut!(self.0);
+        unsafe { gen_texture_mipmaps(ptr) }
+    }
+
+    pub fn filter_mode(&mut self, filter: TextureFilter) {
+        unsafe { set_texture_filter(self.as_raw(), filter as i32) }
+    }
+
+    pub fn wrapping_mode(&mut self, wrap: TextureWrap) {
+        unsafe { set_texture_wrap(self.as_raw(), wrap as i32) }
+    }
+}
+
 impl From<Image> for Texture2D {
     fn from(img: Image) -> Self {
         Self(unsafe { load_texture_from_image(img.as_raw()) })
@@ -838,6 +896,11 @@ impl Image {
         })
     }
 
+    pub fn clear_background(&mut self, color: impl Into<Color>) {
+        let ptr = addr_of_mut!(self.img);
+        unsafe { image_clear_background(ptr, color.into()) }
+    }
+
     pub unsafe fn as_raw(&self) -> crate::sys::Image {
         let ptr = addr_of!(self.img);
         ptr.read()
@@ -1057,11 +1120,68 @@ impl Drawables2D for Image {
         &mut self,
         _texture: &Texture2D,
         _position: impl Into<Vector2>,
-        _tint: Option<Color>,
+        _tint: impl Into<Color>,
     ) -> Result<()> {
         Err(Error::OperationNotSupported {
             verb: "texture drawing",
             noun: "textures",
+        })
+    }
+
+    fn draw_texture_ex(
+        &mut self,
+        _texture: &Texture2D,
+        _position: impl Into<Vector2>,
+        _rotation: f32,
+        _scale: f32,
+        _tint: impl Into<Color>,
+    ) -> Result<()> {
+        Err(Error::OperationNotSupported {
+            verb: "texture drawing",
+            noun: "images",
+        })
+    }
+
+    fn draw_texture_clipped(
+        &mut self,
+        _texture: &Texture2D,
+        _src: impl Into<Rectangle>,
+        _pos: impl Into<Vector2>,
+        _tint: impl Into<Color>,
+    ) -> Result<()> {
+        Err(Error::OperationNotSupported {
+            verb: "texture drawing",
+            noun: "images",
+        })
+    }
+
+    fn draw_texture_rotated(
+        &mut self,
+        _texture: &Texture2D,
+        _src: impl Into<Rectangle>,
+        _dst: impl Into<Rectangle>,
+        _origin: impl Into<Vector2>,
+        _rotation: f32,
+        _tint: impl Into<Color>,
+    ) -> Result<()> {
+        Err(Error::OperationNotSupported {
+            verb: "texture drawing",
+            noun: "images",
+        })
+    }
+
+    fn draw_texture_npatched(
+        &mut self,
+        _texture: &Texture2D,
+        _info: impl Into<NPatchInfo>,
+        _dst: impl Into<Rectangle>,
+        _origin: impl Into<Vector2>,
+        _rotation: f32,
+        _tint: impl Into<Color>,
+    ) -> Result<()> {
+        Err(Error::OperationNotSupported {
+            verb: "texture drawing",
+            noun: "images",
         })
     }
 }
@@ -1625,11 +1745,82 @@ pub trait Drawables2D {
         &mut self,
         texture: &Texture2D,
         position: impl Into<Vector2>,
-        tint: Option<Color>,
+        tint: impl Into<Color>,
     ) -> Result<()> {
         let position = position.into();
-        let tint = tint.unwrap_or(Color::WHITE);
-        Ok(unsafe { draw_texture_v(texture.as_raw(), position, tint) })
+        Ok(unsafe { draw_texture_v(texture.as_raw(), position, tint.into()) })
+    }
+
+    fn draw_texture_ex(
+        &mut self,
+        texture: &Texture2D,
+        position: impl Into<Vector2>,
+        rotation: f32,
+        scale: f32,
+        tint: impl Into<Color>,
+    ) -> Result<()> {
+        let position = position.into();
+        Ok(unsafe {
+            draw_texture_ex(
+                texture.as_raw(),
+                position.into(),
+                rotation,
+                scale,
+                tint.into(),
+            )
+        })
+    }
+
+    fn draw_texture_clipped(
+        &mut self,
+        texture: &Texture2D,
+        src: impl Into<Rectangle>,
+        pos: impl Into<Vector2>,
+        tint: impl Into<Color>,
+    ) -> Result<()> {
+        Ok(unsafe { draw_texture_rec(texture.as_raw(), src.into(), pos.into(), tint.into()) })
+    }
+
+    fn draw_texture_rotated(
+        &mut self,
+        texture: &Texture2D,
+        src: impl Into<Rectangle>,
+        dst: impl Into<Rectangle>,
+        origin: impl Into<Vector2>,
+        rotation: f32,
+        tint: impl Into<Color>,
+    ) -> Result<()> {
+        Ok(unsafe {
+            draw_texture_pro(
+                texture.as_raw(),
+                src.into(),
+                dst.into(),
+                origin.into(),
+                rotation,
+                tint.into(),
+            )
+        })
+    }
+
+    fn draw_texture_npatched(
+        &mut self,
+        texture: &Texture2D,
+        info: impl Into<NPatchInfo>,
+        dst: impl Into<Rectangle>,
+        origin: impl Into<Vector2>,
+        rotation: f32,
+        tint: impl Into<Color>,
+    ) -> Result<()> {
+        Ok(unsafe {
+            draw_texture_n_patch(
+                texture.as_raw(),
+                info.into(),
+                dst.into(),
+                origin.into(),
+                rotation,
+                tint.into(),
+            )
+        })
     }
 }
 
