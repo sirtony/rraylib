@@ -352,6 +352,47 @@ crate::utils::newtype!(Texture2D, unload_texture);
 crate::utils::newtype!(RenderTexture2D, unload_render_texture);
 crate::utils::newtype!(Font, unload_font);
 
+impl Font {
+    pub fn from_file(file_name: impl AsRef<Path>) -> Result<Self> {
+        let file_name = file_name.as_ref().as_os_str().as_encoded_bytes();
+        let file_name = CString::new(file_name)?;
+        let font = unsafe { load_font(file_name.as_ptr()) };
+        let ptr = addr_of!(font);
+        if !unsafe { is_font_valid(ptr.read()) } {
+            return Err(Error::UnableToLoad("font"));
+        }
+        Ok(Self(font))
+    }
+
+    pub fn from_image(img: &Image, key: impl Into<Color>, first_char: i32) -> Result<Self> {
+        let key = key.into();
+        let font = unsafe { load_font_from_image(img.as_raw(), key, first_char) };
+        let ptr = addr_of!(font);
+        if !unsafe { is_font_valid(ptr.read()) } {
+            return Err(Error::UnableToLoad("font"));
+        }
+        Ok(Self(font))
+    }
+
+    pub fn glyph(&self, codepoint: i32) -> GlyphInfo {
+        unsafe { get_glyph_info(self.as_raw(), codepoint) }
+    }
+
+    pub fn glyph_index(&self, codepoint: i32) -> i32 {
+        unsafe { get_glyph_index(self.as_raw(), codepoint) }
+    }
+
+    pub fn atlas_rect(&self, codepoint: i32) -> Rectangle {
+        unsafe { get_glyph_atlas_rec(self.as_raw(), codepoint) }
+    }
+}
+
+impl Default for Font {
+    fn default() -> Self {
+        Self(unsafe { get_font_default() })
+    }
+}
+
 impl RenderTexture2D {
     pub fn new(width: u32, height: u32) -> Result<Self> {
         let tex = unsafe { load_render_texture(width as i32, height as i32) };
@@ -854,53 +895,6 @@ impl Image {
         }
     }
 
-    pub fn draw_text(
-        &mut self,
-        text: impl AsRef<str>,
-        pos: impl Into<Vector2>,
-        font_size: u32,
-        color: impl Into<Color>,
-    ) -> Result<()> {
-        let ptr = addr_of_mut!(self.img);
-        let text = text.as_ref().as_bytes();
-        let text = CString::new(text)?;
-        let pos = pos.into();
-        let (x, y): (i32, i32) = pos.into();
-
-        Ok(unsafe { image_draw_text(ptr, text.as_ptr(), x, y, font_size as i32, color.into()) })
-    }
-
-    pub fn draw_text_ex(
-        &mut self,
-        font: &Font,
-        text: impl AsRef<str>,
-        pos: impl Into<Vector2>,
-        font_size: f32,
-        spacing: f32,
-        tint: impl Into<Color>,
-    ) -> Result<()> {
-        let ptr = addr_of_mut!(self.img);
-        let text = text.as_ref().as_bytes();
-        let text = CString::new(text)?;
-
-        Ok(unsafe {
-            image_draw_text_ex(
-                ptr,
-                font.as_raw(),
-                text.as_ptr(),
-                pos.into(),
-                font_size,
-                spacing,
-                tint.into(),
-            )
-        })
-    }
-
-    pub fn clear_background(&mut self, color: impl Into<Color>) {
-        let ptr = addr_of_mut!(self.img);
-        unsafe { image_clear_background(ptr, color.into()) }
-    }
-
     pub unsafe fn as_raw(&self) -> crate::sys::Image {
         let ptr = addr_of!(self.img);
         ptr.read()
@@ -1183,6 +1177,70 @@ impl Drawables2D for Image {
             verb: "texture drawing",
             noun: "images",
         })
+    }
+
+    fn draw_text(
+        &mut self,
+        text: impl AsRef<str>,
+        pos: impl Into<Vector2>,
+        font_size: u32,
+        color: impl Into<Color>,
+    ) -> Result<()> {
+        let ptr = addr_of_mut!(self.img);
+        let text = text.as_ref().as_bytes();
+        let text = CString::new(text)?;
+        let pos = pos.into();
+        let (x, y): (i32, i32) = pos.into();
+
+        Ok(unsafe { image_draw_text(ptr, text.as_ptr(), x, y, font_size as i32, color.into()) })
+    }
+
+    fn draw_text_ex(
+        &mut self,
+        font: &Font,
+        text: impl AsRef<str>,
+        pos: impl Into<Vector2>,
+        font_size: f32,
+        spacing: f32,
+        tint: impl Into<Color>,
+    ) -> Result<()> {
+        let ptr = addr_of_mut!(self.img);
+        let text = text.as_ref().as_bytes();
+        let text = CString::new(text)?;
+
+        Ok(unsafe {
+            image_draw_text_ex(
+                ptr,
+                font.as_raw(),
+                text.as_ptr(),
+                pos.into(),
+                font_size,
+                spacing,
+                tint.into(),
+            )
+        })
+    }
+
+    fn draw_text_rotated(
+        &mut self,
+        _font: &Font,
+        _text: impl AsRef<str>,
+        _pos: impl Into<Vector2>,
+        _origin: impl Into<Vector2>,
+        _rotation: f32,
+        _font_size: f32,
+        _spacing: f32,
+        _tint: impl Into<Color>,
+    ) -> Result<()> {
+        Err(Error::OperationNotSupported {
+            verb: "rotated text drawing",
+            noun: "images",
+        })
+    }
+
+    fn clear_background(&mut self, color: impl Into<Color>) {
+        let ptr = addr_of_mut!(self.img);
+        unsafe { image_clear_background(ptr, color.into()) }
     }
 }
 
@@ -1822,15 +1880,82 @@ pub trait Drawables2D {
             )
         })
     }
+
+    fn draw_text(
+        &mut self,
+        text: impl AsRef<str>,
+        pos: impl Into<Vector2>,
+        font_size: u32,
+        color: impl Into<Color>,
+    ) -> Result<()> {
+        let text = text.as_ref().as_bytes();
+        let text = CString::new(text)?;
+        let pos = pos.into();
+        let (x, y): (i32, i32) = pos.into();
+
+        Ok(unsafe { draw_text(text.as_ptr(), x, y, font_size as i32, color.into()) })
+    }
+
+    fn draw_text_ex(
+        &mut self,
+        font: &Font,
+        text: impl AsRef<str>,
+        pos: impl Into<Vector2>,
+        font_size: f32,
+        spacing: f32,
+        tint: impl Into<Color>,
+    ) -> Result<()> {
+        let text = text.as_ref().as_bytes();
+        let text = CString::new(text)?;
+
+        Ok(unsafe {
+            draw_text_ex(
+                font.as_raw(),
+                text.as_ptr(),
+                pos.into(),
+                font_size,
+                spacing,
+                tint.into(),
+            )
+        })
+    }
+
+    fn draw_text_rotated(
+        &mut self,
+        font: &Font,
+        text: impl AsRef<str>,
+        pos: impl Into<Vector2>,
+        origin: impl Into<Vector2>,
+        rotation: f32,
+        font_size: f32,
+        spacing: f32,
+        tint: impl Into<Color>,
+    ) -> Result<()> {
+        let text = text.as_ref().as_bytes();
+        let text = CString::new(text)?;
+
+        Ok(unsafe {
+            draw_text_pro(
+                font.as_raw(),
+                text.as_ptr(),
+                pos.into(),
+                origin.into(),
+                rotation,
+                font_size,
+                spacing,
+                tint.into(),
+            )
+        })
+    }
+
+    fn clear_background(&mut self, color: impl Into<Color>) {
+        unsafe { clear_background(color.into()) }
+    }
 }
 
 guarded!(Drawing, drawing);
 
 impl<'a> Drawing<'a> {
-    pub fn clear_background(&mut self, color: Color) {
-        unsafe { clear_background(color) }
-    }
-
     pub fn draw_fps(&mut self, x: i32, y: i32) {
         unsafe { draw_fps(x, y) }
     }
@@ -2014,6 +2139,28 @@ impl<'a> Drawing<'a> {
         let mut ctx = self.begin_vr_stereo_mode(config)?;
         f(&mut ctx);
         Ok(())
+    }
+
+    pub fn line_spacing(&mut self, spacing: i32) {
+        unsafe { set_text_line_spacing(spacing) }
+    }
+
+    pub fn measure_text(&mut self, text: impl AsRef<str>, font_size: u32) -> i32 {
+        let text = text.as_ref().as_bytes();
+        let text = CString::new(text).unwrap();
+        unsafe { measure_text(text.as_ptr(), font_size as i32) }
+    }
+
+    pub fn measure_text_ex(
+        &mut self,
+        font: &Font,
+        text: impl AsRef<str>,
+        font_size: f32,
+        spacing: f32,
+    ) -> Vector2 {
+        let text = text.as_ref().as_bytes();
+        let text = CString::new(text).unwrap();
+        unsafe { measure_text_ex(font.as_raw(), text.as_ptr(), font_size, spacing) }
     }
 }
 
