@@ -1,5 +1,7 @@
-use std::ffi::CString;
-use std::sync::Mutex;
+extern crate alloc;
+
+use crate::error::{Error, Result};
+use std::ffi::{CStr, CString};
 use typed_builder::TypedBuilder;
 
 /// Monitor and Window handling.
@@ -11,57 +13,36 @@ pub mod graphics;
 /// Math functions and structures.
 pub mod math;
 
+/// Keyboard, mouse, gamepad, touch, and gestures input.
+pub mod input;
+
+/// Record and playback events.
+pub mod automation;
+
 /// Unsafe bindings to raylib, raymath, rlgl, raygui (if enabled), and Physac (if enabled).
 pub mod sys;
+
+pub(crate) mod utils;
+
+pub mod error;
+/// Provides a wrapper for raylib's logging functionality.
+pub mod log;
 
 use crate::display::Window;
 use crate::graphics::Drawing;
 use crate::sys::*;
 
-pub type Result<T> = std::result::Result<T, Error>;
-
-#[derive(Debug, thiserror::Error)]
-pub enum Error {
-    #[error(transparent)]
-    Nul(#[from] std::ffi::NulError),
-
-    #[error("{0} subsystem has not yet been initialized")]
-    SubsystemNotInitialized(&'static str),
-
-    #[error("{0} subsystem has already been initialized")]
-    SubsystemAlreadyInitialized(&'static str),
-
-    #[error("Unable to load {0}")]
-    UnableToLoad(&'static str),
-
-    #[error(transparent)]
-    Utf8(#[from] std::str::Utf8Error),
-
-    #[error(transparent)]
-    Io(#[from] std::io::Error),
-
-    #[error("Can't acquire {0} lock as another thread already holds it")]
-    ThreadAlreadyLocked(&'static str),
-
-    #[error("{0}")]
-    Generic(String),
-}
-
-impl<'a> From<&'a str> for Error {
-    fn from(s: &'a str) -> Self {
-        Self::Generic(s.to_string())
-    }
-}
-
-impl From<String> for Error {
-    fn from(s: String) -> Self {
-        Self::Generic(s)
-    }
-}
-
-#[derive(Debug, TypedBuilder)]
-pub struct InitOptions {
-    #[builder(setter( transform = | x: impl ToString | x.to_string() ), default = "rraylib".to_string())]
+#[derive(Debug, Clone, TypedBuilder)]
+pub struct Options {
+    #[builder(
+        setter( transform = | x: impl ToString | x.to_string() ),
+        default = format!(
+            "rraylib v{}.{}",
+            crate::sys::RAYLIB_VERSION_MAJOR,
+            crate::sys::RAYLIB_VERSION_MINOR
+        )
+        .to_string()
+    )]
     pub title: String,
     #[builder(default = 800)]
     pub width: u32,
@@ -98,36 +79,13 @@ pub struct InitOptions {
     pub max_height: Option<u32>,
 }
 
-impl Default for InitOptions {
+impl Default for Options {
     fn default() -> Self {
         Self::builder().build()
     }
 }
 
-#[macro_export]
-macro_rules! lock {
-    ( $lock: expr ) => {
-        $lock
-            .lock()
-            .unwrap_or_else(::std::sync::TryLockError::PoisonError::into_inner)
-    };
-}
-
-#[macro_export]
-macro_rules! try_lock {
-    ( $lock: expr ) => {
-        match $lock.try_lock() {
-            Ok(guard) => Some(guard),
-            Err(::std::sync::TryLockError::Poisoned(guard)) => Some(guard.into_inner()),
-            Err(_) => None,
-        }
-    };
-}
-
-pub struct Context {
-    window: Mutex<()>,
-    drawing: Mutex<()>,
-}
+crate::utils::guarded!(base Context, window, drawing);
 
 impl Context {
     pub fn window(&self) -> Result<Window> {
@@ -141,11 +99,49 @@ impl Context {
 
     pub fn begin_drawing(&self) -> Result<Drawing> {
         let guard = try_lock!(self.drawing).ok_or(Error::ThreadAlreadyLocked("drawing"))?;
-        Ok(Drawing::new(guard, Mutex::new(())))
+        Ok(Drawing::new(guard))
+    }
+
+    pub fn exit_key(&mut self, key: Key) {
+        unsafe {
+            set_exit_key(key as i32);
+        }
+    }
+
+    /// Gets the time in milliseconds for the last frame drawn.
+    pub fn delta_time() -> f32 {
+        unsafe { get_frame_time() * 1000.0 }
+    }
+
+    pub fn elapsed_time() -> f64 {
+        unsafe { get_time() }
+    }
+
+    pub fn fps() -> u32 {
+        unsafe { get_fps() as u32 }
+    }
+
+    pub fn clipboard_text(&self) -> Result<String> {
+        let text = unsafe { get_clipboard_text() };
+
+        if text.is_null() {
+            return Ok(String::new());
+        }
+
+        let text = unsafe { CStr::from_ptr(text) };
+        Ok(text.to_string_lossy().into_owned())
+    }
+
+    pub fn set_clipboard_text(&self, text: impl AsRef<str>) -> Result<()> {
+        let text = CString::new(text.as_ref())?;
+        unsafe {
+            set_clipboard_text(text.as_ptr());
+        }
+        Ok(())
     }
 }
 
-pub fn init(options: InitOptions) -> Result<Context> {
+pub fn init(options: Options) -> Result<Context> {
     if unsafe { is_window_ready() } {
         return Err(Error::SubsystemAlreadyInitialized("window"));
     }
@@ -208,13 +204,10 @@ pub fn init(options: InitOptions) -> Result<Context> {
         }
 
         set_window_max_size(
-            options.max_width.unwrap_or(0) as i32,
-            options.max_height.unwrap_or(0) as i32,
+            options.max_width.unwrap_or(u32::MAX) as i32,
+            options.max_height.unwrap_or(u32::MAX) as i32,
         )
     }
 
-    Ok(Context {
-        window: Mutex::new(()),
-        drawing: Mutex::new(()),
-    })
+    Ok(Context::new())
 }

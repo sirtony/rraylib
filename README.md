@@ -14,7 +14,7 @@ Provides an all-in-one solution for using raylib in Rust in a way that is both s
 
 Unsafe bindings are provided by the `sys` module in this crate, and you may use raylib as you would in C if you prefer.
 
-The build script renames the automatically generated bindings ot be more idiomatic, so all functions, structs, enums, and constants are renamed to follow Rust's naming conventions.
+The build script renames the automatically generated bindings to be more idiomatic, so all functions, structs, enums, and constants are renamed to follow Rust's naming conventions.
 
 The `ConfigFlags` struct was also renamed to `WindowFlags` to be more clear about its purpose.
 
@@ -24,11 +24,13 @@ I was unsatisfied with the existing offerings for using raylib in Rust, so I dec
 
 ## Platform Support
 
-Only Linux and Windows are officially supported. This crate does not provide compilation support for Android, Web, or Raspberry Pi.
+This crate is developed on Linux and as such that's where development will focus. Windows support will also be officially maintained, however it's not a priority.
 
 MacOS should work, but it is not officially supported and will not be fixed if or when it breaks.
 
-If you want to use this crate on a platform that is not officially supported, pull requests are welcome.
+This crate does not provide compilation support for Android, Web, or Raspberry Pi and there are no plans to change that.
+
+Pull requests are welcome for any of the above.
 
 ## Features
 
@@ -53,7 +55,7 @@ If you want to use this crate on a platform that is not officially supported, pu
 use rraylib::InitOptions;
 use rraylib::graphics::Color;
 
-fn main() -> anyhow::Result<()> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let options = InitOptions::default();
     let mut rl = rraylib::init(options)?;
     let mut window = rl.window()?;

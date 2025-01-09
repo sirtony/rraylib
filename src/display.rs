@@ -1,7 +1,8 @@
 use crate::sys::*;
 use crate::Result;
 use paste::paste;
-use std::ffi::CStr;
+use std::ffi::{CStr, CString};
+use std::path::Path;
 use std::sync::MutexGuard;
 
 macro_rules! window_flag {
@@ -26,6 +27,7 @@ macro_rules! window_flag {
     };
 }
 
+#[allow(dead_code)]
 pub struct Window<'a>(MutexGuard<'a, ()>);
 
 impl<'a> Window<'a> {
@@ -124,8 +126,8 @@ impl<'a> Window<'a> {
         unsafe { restore_window() }
     }
 
-    pub fn icon(&mut self, image: &Image) {
-        unsafe { set_window_icon(*image) }
+    pub fn icon(&mut self, image: impl Into<Image>) {
+        unsafe { set_window_icon(image.into()) }
     }
 
     pub fn icons(&mut self, images: impl AsRef<[Image]> + ExactSizeIterator) {
@@ -237,6 +239,13 @@ impl<'a> Window<'a> {
 
     pub fn is_cursor_on_screen(&self) -> bool {
         unsafe { is_cursor_on_screen() }
+    }
+
+    pub fn screenshot(&self, filename: impl AsRef<Path>) -> Result<()> {
+        let filename = filename.as_ref().as_os_str().as_encoded_bytes();
+        let filename = CString::new(filename.as_ref())?;
+        unsafe { take_screenshot(filename.as_ptr()) }
+        Ok(())
     }
 }
 

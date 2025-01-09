@@ -43,6 +43,7 @@ impl RustyRenamer {
         ("TraceLogLevel", "LogLevel"),
         ("va_list", "VariadicList"),
         ("__builtin_va_list", "BuiltinVariadicList"),
+        ("__va_list_tag", "VaListTag"),
         ("KeyboardKey", "Key"),
     ];
 }
@@ -62,6 +63,9 @@ impl ParseCallbacks for RustyRenamer {
             "EndMode2D" => Some("end_mode_2d".to_string()),
             "BeginMode3D" => Some("begin_mode_3d".to_string()),
             "EndMode3D" => Some("end_mode_3d".to_string()),
+            "GetWorldToScreen2D" => Some("get_world_to_screen_2d".to_string()),
+            "GetScreenToWorld2D" => Some("get_screen_to_world_2d".to_string()),
+            "GetCameraMatrix2D" => Some("get_camera_matrix_2d".to_string()),
 
             x if x.contains("Vector") => {
                 let name = x.to_case(Case::Snake).replace("vector_", "vector");
@@ -216,6 +220,28 @@ fn main() -> anyhow::Result<()> {
     file.flush()?;
     std::mem::forget(file);
 
+    let no_copy = vec![
+        "Image",
+        "(Render)?Texture",
+        "GlyphInfo",
+        "Font",
+        "Mesh",
+        "Shader",
+        "Material(Map)?",
+        "Model(Animation)?",
+        "Wave",
+        "AudioStream",
+        "Sound",
+        "Music",
+        "VrStereoConfig",
+        "FilePathList",
+        "AutomationEventList",
+        "RlVertexBuffer",
+        "RlRenderBatch",
+    ];
+
+    let no_copy = format!("^({})$", no_copy.join("|"));
+
     let sys_path = dir.join("..").join("src").join("sys.rs");
     let mut file = File::create(&sys_path)?;
     let wrapper = dir.join(WRAPPER_C);
@@ -237,6 +263,7 @@ fn main() -> anyhow::Result<()> {
         .blocklist_var("^__glibc.*")
         .blocklist_var(".*?_H$")
         .blocklist_var("^__.*")
+        .no_copy(no_copy)
         .disable_header_comment()
         .layout_tests(false)
         .prepend_enum_name(false)
