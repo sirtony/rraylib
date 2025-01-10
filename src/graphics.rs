@@ -1,5 +1,5 @@
 use crate::sys::*;
-use crate::{guarded, try_lock, Error, Result};
+use crate::{guarded, newtype, try_lock, Error, Result};
 use std::ffi::{c_void, CString};
 use std::fs::File;
 use std::hash::{Hash, Hasher};
@@ -62,15 +62,67 @@ impl SplineType {
     }
 }
 
-#[derive(Debug, Clone)]
-pub enum Shape {
+#[derive(Debug, Clone, Copy)]
+pub enum Shape3D<'t> {
+    Line(Vector3, Vector3),
+    Circle {
+        center: Vector3,
+        radius: f32,
+        rotation_axis: Vector3,
+        rotation_angle: f32,
+    },
+    Triangle(Vector3, Vector3, Vector3),
+    TriangleStrip(&'t [Vector3]),
+    Cube {
+        position: Vector3,
+        size: Vector3,
+    },
+    Sphere {
+        center: Vector3,
+        radius: f32,
+        rings: u32,
+        slices: u32,
+    },
+    Cylinder {
+        start_pos: Vector3,
+        end_pos: Vector3,
+        start_radius: f32,
+        end_radius: f32,
+        slices: u32,
+    },
+    Capsule {
+        start_pos: Vector3,
+        end_pos: Vector3,
+        radius: f32,
+        slices: u32,
+        rings: u32,
+    },
+    Plane {
+        center: Vector3,
+        size: Vector2,
+    },
+    Grid {
+        slices: u32,
+        spacing: f32,
+    },
+    Ray(Ray),
+}
+
+impl<'t> From<Ray> for Shape3D<'t> {
+    fn from(ray: Ray) -> Self {
+        Self::Ray(ray)
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum Shape2D<'t> {
     Pixel(Vector2),
     Line {
         start: Vector2,
         end: Vector2,
         thickness: Option<f32>,
     },
-    LineStrip(Vec<Vector2>),
+    LineStrip(&'t [Vector2]),
     Bezier {
         start: Vector2,
         end: Vector2,
@@ -112,8 +164,8 @@ pub enum Shape {
         v2: Vector2,
         v3: Vector2,
     },
-    TriangleFan(Vec<Vector2>),
-    TriangleStrip(Vec<Vector2>),
+    TriangleFan(&'t [Vector2]),
+    TriangleStrip(&'t [Vector2]),
     Polygon {
         center: Vector2,
         sides: i32,
@@ -122,109 +174,109 @@ pub enum Shape {
     },
     Spline {
         spline_type: SplineType,
-        points: Vec<Vector2>,
+        points: &'t [Vector2],
         thickness: f32,
     },
 }
 
-impl Shape {
-    pub fn collides_with(&self, other: impl Into<Shape>) -> bool {
+impl<'t> Shape2D<'t> {
+    pub fn collides_with(&self, other: impl Into<Shape2D<'t>>) -> bool {
         let other = other.into();
         let pair = (self, &other);
 
         match pair {
-            (Shape::Rectangle { rect: r1, .. }, Shape::Rectangle { rect: r2, .. }) => unsafe {
+            (Shape2D::Rectangle { rect: r1, .. }, Shape2D::Rectangle { rect: r2, .. }) => unsafe {
                 check_collision_recs(*r1, *r2)
             },
             (
-                Shape::Circle {
+                Shape2D::Circle {
                     center: c1,
                     radius: r1,
                 },
-                Shape::Circle {
+                Shape2D::Circle {
                     center: c2,
                     radius: r2,
                 },
             ) => unsafe { check_collision_circles(*c1, *r1, *c2, *r2) },
             (
-                Shape::Rectangle { rect: r, .. },
-                Shape::Circle {
+                Shape2D::Rectangle { rect: r, .. },
+                Shape2D::Circle {
                     center: c,
                     radius: r2,
                 },
             ) => unsafe { check_collision_circle_rec(*c, *r2, *r) },
             (
-                Shape::Circle {
+                Shape2D::Circle {
                     center: c,
                     radius: r,
                 },
-                Shape::Rectangle { rect: rc, .. },
+                Shape2D::Rectangle { rect: rc, .. },
             ) => unsafe { check_collision_circle_rec(*c, *r, *rc) },
 
             (
-                Shape::Circle {
+                Shape2D::Circle {
                     center: c,
                     radius: r,
                 },
-                Shape::Line {
+                Shape2D::Line {
                     start: s, end: e, ..
                 },
             ) => unsafe { check_collision_circle_line(*c, *r, *s, *e) },
             (
-                Shape::Line {
+                Shape2D::Line {
                     start: s, end: e, ..
                 },
-                Shape::Circle {
+                Shape2D::Circle {
                     center: c,
                     radius: r,
                 },
             ) => unsafe { check_collision_circle_line(*c, *r, *s, *e) },
 
-            (Shape::Pixel(p), Shape::Rectangle { rect: r, .. }) => unsafe {
+            (Shape2D::Pixel(p), Shape2D::Rectangle { rect: r, .. }) => unsafe {
                 check_collision_point_rec(*p, *r)
             },
-            (Shape::Rectangle { rect: r, .. }, Shape::Pixel(p)) => unsafe {
+            (Shape2D::Rectangle { rect: r, .. }, Shape2D::Pixel(p)) => unsafe {
                 check_collision_point_rec(*p, *r)
             },
 
             (
-                Shape::Pixel(p),
-                Shape::Circle {
+                Shape2D::Pixel(p),
+                Shape2D::Circle {
                     center: c,
                     radius: r,
                 },
             ) => unsafe { check_collision_point_circle(*p, *c, *r) },
             (
-                Shape::Circle {
+                Shape2D::Circle {
                     center: c,
                     radius: r,
                 },
-                Shape::Pixel(p),
+                Shape2D::Pixel(p),
             ) => unsafe { check_collision_point_circle(*p, *c, *r) },
 
-            (Shape::Pixel(p), Shape::Triangle { v1, v2, v3 }) => unsafe {
+            (Shape2D::Pixel(p), Shape2D::Triangle { v1, v2, v3 }) => unsafe {
                 check_collision_point_triangle(*p, *v1, *v2, *v3)
             },
-            (Shape::Triangle { v1, v2, v3 }, Shape::Pixel(p)) => unsafe {
+            (Shape2D::Triangle { v1, v2, v3 }, Shape2D::Pixel(p)) => unsafe {
                 check_collision_point_triangle(*p, *v1, *v2, *v3)
             },
 
             (
-                Shape::Pixel(p),
-                Shape::Line {
+                Shape2D::Pixel(p),
+                Shape2D::Line {
                     start: s, end: e, ..
                 },
             ) => unsafe { check_collision_point_line(*p, *s, *e, 1) },
             (
-                Shape::Line {
+                Shape2D::Line {
                     start: s, end: e, ..
                 },
-                Shape::Pixel(p),
+                Shape2D::Pixel(p),
             ) => unsafe { check_collision_point_line(*p, *s, *e, 1) },
 
             (
-                Shape::Pixel(p),
-                Shape::Polygon {
+                Shape2D::Pixel(p),
+                Shape2D::Polygon {
                     center,
                     sides,
                     radius,
@@ -232,13 +284,13 @@ impl Shape {
                 },
             )
             | (
-                Shape::Polygon {
+                Shape2D::Polygon {
                     center,
                     sides,
                     radius,
                     ..
                 },
-                Shape::Pixel(p),
+                Shape2D::Pixel(p),
             ) => {
                 let mut points = Vec::with_capacity(*sides as usize);
                 for i in 0..*sides {
@@ -258,21 +310,21 @@ impl Shape {
         }
     }
 
-    pub fn collision_point(&self, other: impl Into<Shape>) -> Option<(i32, i32)> {
+    pub fn collision_point(&self, other: impl Into<Shape2D<'t>>) -> Option<(i32, i32)> {
         let (x, y): (i32, i32) = self.collision_pointv(other)?.into();
         Some((x, y))
     }
 
-    pub fn collision_pointv(&self, other: impl Into<Shape>) -> Option<Vector2> {
+    pub fn collision_pointv(&self, other: impl Into<Shape2D<'t>>) -> Option<Vector2> {
         let other = other.into();
         let pair = (self, &other);
 
         match pair {
             (
-                Shape::Line {
+                Shape2D::Line {
                     start: s1, end: e1, ..
                 },
-                Shape::Line {
+                Shape2D::Line {
                     start: s2, end: e2, ..
                 },
             ) => {
@@ -294,7 +346,7 @@ impl Shape {
     pub fn spline_point(&self, t: f32) -> Option<Vector2> {
         let t = t.clamp(0.0, 1.0);
         match self {
-            Shape::Spline {
+            Shape2D::Spline {
                 spline_type,
                 points,
                 ..
@@ -337,7 +389,7 @@ impl Shape {
     }
 }
 
-impl<T: Into<Rectangle>> From<T> for Shape {
+impl<'t, T: Into<Rectangle>> From<T> for Shape2D<'t> {
     fn from(rect: T) -> Self {
         Self::Rectangle {
             rect: rect.into(),
@@ -346,11 +398,12 @@ impl<T: Into<Rectangle>> From<T> for Shape {
     }
 }
 
-crate::utils::newtype!(VrStereoConfig, unload_vr_stereo_config);
-crate::utils::newtype!(Shader, unload_shader);
-crate::utils::newtype!(Texture2D, unload_texture);
-crate::utils::newtype!(RenderTexture2D, unload_render_texture);
-crate::utils::newtype!(Font, unload_font);
+newtype!(VrStereoConfig, unload_vr_stereo_config);
+newtype!(Shader, unload_shader);
+newtype!(Texture2D, unload_texture);
+newtype!(RenderTexture2D, unload_render_texture);
+newtype!(Font, unload_font);
+newtype!(Model, unload_model);
 
 impl Font {
     pub fn from_file(file_name: impl AsRef<Path>) -> Result<Self> {
@@ -918,13 +971,17 @@ impl Drop for Image {
 }
 
 impl Drawables2D for Image {
-    fn draw_shape(&mut self, shape: impl Into<Shape>, color: impl Into<Color>) -> Result<()> {
+    fn draw_shape<'t>(
+        &mut self,
+        shape: impl Into<Shape2D<'t>>,
+        color: impl Into<Color>,
+    ) -> Result<()> {
         let color = color.into();
         let img_ptr = addr_of_mut!(self.img);
 
         match shape.into() {
-            Shape::Pixel(p) => Ok(unsafe { draw_pixel(p.x as i32, p.y as i32, color) }),
-            Shape::Line {
+            Shape2D::Pixel(p) => Ok(unsafe { draw_pixel(p.x as i32, p.y as i32, color) }),
+            Shape2D::Line {
                 start,
                 end,
                 thickness,
@@ -933,7 +990,7 @@ impl Drawables2D for Image {
             } else {
                 unsafe { image_draw_line_v(img_ptr, start, end, color) }
             }),
-            Shape::LineStrip(points) => {
+            Shape2D::LineStrip(points) => {
                 // there is no line strip function for images, so implement it manually
                 for i in 0..points.len() - 1 {
                     let start = points[i];
@@ -943,10 +1000,10 @@ impl Drawables2D for Image {
 
                 Ok(())
             }
-            Shape::Circle { center, radius } => {
+            Shape2D::Circle { center, radius } => {
                 Ok(unsafe { image_draw_circle_v(img_ptr, center, radius as i32, color) })
             }
-            Shape::Rectangle { rect, rotation } => {
+            Shape2D::Rectangle { rect, rotation } => {
                 if let Some(_) = rotation {
                     Err(Error::OperationNotSupported {
                         verb: "shape drawing",
@@ -956,52 +1013,60 @@ impl Drawables2D for Image {
                     Ok(unsafe { image_draw_rectangle_rec(img_ptr, rect, color) })
                 }
             }
-            Shape::Triangle { v1, v2, v3 } => {
+            Shape2D::Triangle { v1, v2, v3 } => {
                 Ok(unsafe { image_draw_triangle(img_ptr, v1, v2, v3, color) })
             }
-            Shape::TriangleFan(mut points) => {
-                let ptr = points.as_mut_ptr();
-                Ok(unsafe { image_draw_triangle_fan(img_ptr, ptr, points.len() as i32, color) })
+            Shape2D::TriangleFan(points) => {
+                let ptr = points.as_ptr();
+                // casting away the const-ness of the pointer is safe because the pointer is only being read
+                // and the `*mut Vector2` pointer in the function signature was generated in error
+                // because the C API doesn't mark the pointer as const even though it's not written to
+                Ok(unsafe {
+                    image_draw_triangle_fan(img_ptr, ptr as *mut _, points.len() as i32, color)
+                })
             }
-            Shape::TriangleStrip(mut points) => {
-                let ptr = points.as_mut_ptr();
-                Ok(unsafe { image_draw_triangle_strip(img_ptr, ptr, points.len() as i32, color) })
+            Shape2D::TriangleStrip(points) => {
+                let ptr = points.as_ptr();
+                // ditto
+                Ok(unsafe {
+                    image_draw_triangle_strip(img_ptr, ptr as *mut _, points.len() as i32, color)
+                })
             }
 
-            Shape::Bezier { .. } => Err(Error::OperationNotSupported {
+            Shape2D::Bezier { .. } => Err(Error::OperationNotSupported {
                 verb: "shape drawing",
                 noun: "bezier curves",
             }),
-            Shape::Pie { .. } => Err(Error::OperationNotSupported {
+            Shape2D::Pie { .. } => Err(Error::OperationNotSupported {
                 verb: "shape drawing",
                 noun: "pie slices",
             }),
-            Shape::Ellipse { .. } => Err(Error::OperationNotSupported {
+            Shape2D::Ellipse { .. } => Err(Error::OperationNotSupported {
                 verb: "shape drawing",
                 noun: "ellipses",
             }),
-            Shape::Ring { .. } => Err(Error::OperationNotSupported {
+            Shape2D::Ring { .. } => Err(Error::OperationNotSupported {
                 verb: "shape drawing",
                 noun: "rings",
             }),
-            Shape::RoundedRectangle { .. } => Err(Error::OperationNotSupported {
+            Shape2D::RoundedRectangle { .. } => Err(Error::OperationNotSupported {
                 verb: "shape drawing",
                 noun: "rounded rectangles",
             }),
-            Shape::Polygon { .. } => Err(Error::OperationNotSupported {
+            Shape2D::Polygon { .. } => Err(Error::OperationNotSupported {
                 verb: "shape drawing",
                 noun: "polygons",
             }),
-            Shape::Spline { .. } => Err(Error::OperationNotSupported {
+            Shape2D::Spline { .. } => Err(Error::OperationNotSupported {
                 verb: "shape drawing",
                 noun: "splines",
             }),
         }
     }
 
-    fn draw_lines(
+    fn draw_lines<'t>(
         &mut self,
-        shape: impl Into<Shape>,
+        shape: impl Into<Shape2D<'t>>,
         line_thickness: Option<f32>,
         color: impl Into<Color>,
     ) -> Result<()> {
@@ -1009,10 +1074,10 @@ impl Drawables2D for Image {
         let color = color.into();
         let img_ptr = addr_of_mut!(self.img);
         match shape.into() {
-            Shape::Pixel(p) => {
+            Shape2D::Pixel(p) => {
                 Ok(unsafe { image_draw_pixel(img_ptr, p.x as i32, p.y as i32, color) })
             }
-            Shape::Line {
+            Shape2D::Line {
                 start,
                 end,
                 thickness,
@@ -1021,7 +1086,7 @@ impl Drawables2D for Image {
             } else {
                 unsafe { image_draw_line_v(img_ptr, start, end, color) }
             }),
-            Shape::LineStrip(points) => {
+            Shape2D::LineStrip(points) => {
                 // there is no line strip function for images, so implement it manually
                 for i in 0..points.len() - 1 {
                     let start = points[i];
@@ -1031,10 +1096,10 @@ impl Drawables2D for Image {
 
                 Ok(())
             }
-            Shape::Circle { center, radius } => {
+            Shape2D::Circle { center, radius } => {
                 Ok(unsafe { image_draw_circle_lines_v(img_ptr, center, radius as i32, color) })
             }
-            Shape::Rectangle { rect, rotation } => {
+            Shape2D::Rectangle { rect, rotation } => {
                 if let Some(_) = rotation {
                     Err(Error::OperationNotSupported {
                         verb: "line drawing",
@@ -1046,49 +1111,51 @@ impl Drawables2D for Image {
                     })
                 }
             }
-            Shape::Triangle { v1, v2, v3 } => Ok(unsafe { draw_triangle_lines(v1, v2, v3, color) }),
-            Shape::TriangleFan(_) => Err(Error::OperationNotSupported {
+            Shape2D::Triangle { v1, v2, v3 } => {
+                Ok(unsafe { draw_triangle_lines(v1, v2, v3, color) })
+            }
+            Shape2D::TriangleFan(_) => Err(Error::OperationNotSupported {
                 verb: "line drawing",
                 noun: "triangle fans",
             }),
-            Shape::TriangleStrip(_) => Err(Error::OperationNotSupported {
+            Shape2D::TriangleStrip(_) => Err(Error::OperationNotSupported {
                 verb: "line drawing",
                 noun: "triangle strips",
             }),
-            Shape::Bezier { .. } => Err(Error::OperationNotSupported {
+            Shape2D::Bezier { .. } => Err(Error::OperationNotSupported {
                 verb: "line drawing",
                 noun: "bezier curves",
             }),
-            Shape::Pie { .. } => Err(Error::OperationNotSupported {
+            Shape2D::Pie { .. } => Err(Error::OperationNotSupported {
                 verb: "line drawing",
                 noun: "pie slices",
             }),
-            Shape::Ellipse { .. } => Err(Error::OperationNotSupported {
+            Shape2D::Ellipse { .. } => Err(Error::OperationNotSupported {
                 verb: "line drawing",
                 noun: "ellipses",
             }),
-            Shape::Ring { .. } => Err(Error::OperationNotSupported {
+            Shape2D::Ring { .. } => Err(Error::OperationNotSupported {
                 verb: "line drawing",
                 noun: "rings",
             }),
-            Shape::RoundedRectangle { .. } => Err(Error::OperationNotSupported {
+            Shape2D::RoundedRectangle { .. } => Err(Error::OperationNotSupported {
                 verb: "line drawing",
                 noun: "rounded rectangles",
             }),
-            Shape::Polygon { .. } => Err(Error::OperationNotSupported {
+            Shape2D::Polygon { .. } => Err(Error::OperationNotSupported {
                 verb: "line drawing",
                 noun: "polygons",
             }),
-            Shape::Spline { .. } => Err(Error::OperationNotSupported {
+            Shape2D::Spline { .. } => Err(Error::OperationNotSupported {
                 verb: "line drawing",
                 noun: "splines",
             }),
         }
     }
 
-    fn draw_gradient_h(
+    fn draw_gradient_h<'t>(
         &mut self,
-        _shape: impl Into<Shape>,
+        _shape: impl Into<Shape2D<'t>>,
         _start_color: impl Into<Color>,
         _end_color: impl Into<Color>,
     ) -> Result<()> {
@@ -1098,9 +1165,9 @@ impl Drawables2D for Image {
         })
     }
 
-    fn draw_gradient_v(
+    fn draw_gradient_v<'t>(
         &mut self,
-        _shape: impl Into<Shape>,
+        _shape: impl Into<Shape2D<'t>>,
         _start_color: impl Into<Color>,
         _end_color: impl Into<Color>,
     ) -> Result<()> {
@@ -1508,11 +1575,15 @@ impl Into<Matrix> for Camera2D {
 }
 
 pub trait Drawables2D {
-    fn draw_shape(&mut self, shape: impl Into<Shape>, color: impl Into<Color>) -> Result<()> {
+    fn draw_shape<'t>(
+        &mut self,
+        shape: impl Into<Shape2D<'t>>,
+        color: impl Into<Color>,
+    ) -> Result<()> {
         let color = color.into();
         match shape.into() {
-            Shape::Pixel(p) => Ok(unsafe { draw_pixel(p.x as i32, p.y as i32, color) }),
-            Shape::Line {
+            Shape2D::Pixel(p) => Ok(unsafe { draw_pixel(p.x as i32, p.y as i32, color) }),
+            Shape2D::Line {
                 start,
                 end,
                 thickness,
@@ -1521,17 +1592,19 @@ pub trait Drawables2D {
             } else {
                 unsafe { draw_line_v(start, end, color) }
             }),
-            Shape::LineStrip(points) => {
+            Shape2D::LineStrip(points) => {
                 let ptr = points.as_ptr();
                 Ok(unsafe { draw_line_strip(ptr, points.len() as i32, color) })
             }
-            Shape::Bezier {
+            Shape2D::Bezier {
                 start,
                 end,
                 thickness,
             } => Ok(unsafe { draw_line_bezier(start, end, thickness, color) }),
-            Shape::Circle { center, radius } => Ok(unsafe { draw_circle_v(center, radius, color) }),
-            Shape::Pie {
+            Shape2D::Circle { center, radius } => {
+                Ok(unsafe { draw_circle_v(center, radius, color) })
+            }
+            Shape2D::Pie {
                 center,
                 radius,
                 start_angle,
@@ -1547,10 +1620,10 @@ pub trait Drawables2D {
                     color,
                 ))
             },
-            Shape::Ellipse { center, radius } => Ok(unsafe {
+            Shape2D::Ellipse { center, radius } => Ok(unsafe {
                 draw_ellipse(center.x as i32, center.y as i32, radius.x, radius.y, color)
             }),
-            Shape::Ring {
+            Shape2D::Ring {
                 center,
                 inner_radius,
                 outer_radius,
@@ -1567,32 +1640,32 @@ pub trait Drawables2D {
                     color,
                 )
             }),
-            Shape::Rectangle { rect, rotation } => Ok(if let Some(rotation) = rotation {
+            Shape2D::Rectangle { rect, rotation } => Ok(if let Some(rotation) = rotation {
                 unsafe { draw_rectangle_pro(rect, rect.centerv(), rotation, color) }
             } else {
                 unsafe { draw_rectangle_rec(rect, color) }
             }),
-            Shape::RoundedRectangle {
+            Shape2D::RoundedRectangle {
                 rect,
                 roundness,
                 segments,
             } => Ok(unsafe { draw_rectangle_rounded(rect, roundness, segments, color) }),
-            Shape::Triangle { v1, v2, v3 } => Ok(unsafe { draw_triangle(v1, v2, v3, color) }),
-            Shape::TriangleFan(points) => {
+            Shape2D::Triangle { v1, v2, v3 } => Ok(unsafe { draw_triangle(v1, v2, v3, color) }),
+            Shape2D::TriangleFan(points) => {
                 let ptr = points.as_ptr();
                 Ok(unsafe { draw_triangle_fan(ptr, points.len() as i32, color) })
             }
-            Shape::TriangleStrip(points) => {
+            Shape2D::TriangleStrip(points) => {
                 let ptr = points.as_ptr();
                 Ok(unsafe { draw_triangle_strip(ptr, points.len() as i32, color) })
             }
-            Shape::Polygon {
+            Shape2D::Polygon {
                 center,
                 sides,
                 radius,
                 rotation,
             } => Ok(unsafe { draw_poly(center, sides, radius, rotation, color) }),
-            Shape::Spline {
+            Shape2D::Spline {
                 spline_type,
                 points,
                 thickness,
@@ -1600,17 +1673,17 @@ pub trait Drawables2D {
         }
     }
 
-    fn draw_lines(
+    fn draw_lines<'t>(
         &mut self,
-        shape: impl Into<Shape>,
+        shape: impl Into<Shape2D<'t>>,
         line_thickness: Option<f32>,
         color: impl Into<Color>,
     ) -> Result<()> {
         let line_thickness = line_thickness.unwrap_or(1.0);
         let color = color.into();
         match shape.into() {
-            Shape::Pixel(p) => Ok(unsafe { draw_pixel(p.x as i32, p.y as i32, color) }),
-            Shape::Line {
+            Shape2D::Pixel(p) => Ok(unsafe { draw_pixel(p.x as i32, p.y as i32, color) }),
+            Shape2D::Line {
                 start,
                 end,
                 thickness,
@@ -1619,19 +1692,19 @@ pub trait Drawables2D {
             } else {
                 unsafe { draw_line_v(start, end, color) }
             }),
-            Shape::LineStrip(points) => {
+            Shape2D::LineStrip(points) => {
                 let ptr = points.as_ptr();
                 Ok(unsafe { draw_line_strip(ptr, points.len() as i32, color) })
             }
-            Shape::Bezier {
+            Shape2D::Bezier {
                 start,
                 end,
                 thickness,
             } => Ok(unsafe { draw_line_bezier(start, end, thickness, color) }),
-            Shape::Circle { center, radius } => {
+            Shape2D::Circle { center, radius } => {
                 Ok(unsafe { draw_circle_lines_v(center, radius, color) })
             }
-            Shape::Pie {
+            Shape2D::Pie {
                 center,
                 radius,
                 start_angle,
@@ -1647,10 +1720,10 @@ pub trait Drawables2D {
                     color,
                 )
             }),
-            Shape::Ellipse { center, radius } => Ok(unsafe {
+            Shape2D::Ellipse { center, radius } => Ok(unsafe {
                 draw_ellipse_lines(center.x as i32, center.y as i32, radius.x, radius.y, color)
             }),
-            Shape::Ring {
+            Shape2D::Ring {
                 center,
                 inner_radius,
                 outer_radius,
@@ -1667,7 +1740,7 @@ pub trait Drawables2D {
                     color,
                 )
             }),
-            Shape::Rectangle { rect, rotation } => {
+            Shape2D::Rectangle { rect, rotation } => {
                 if let Some(_) = rotation {
                     Err(Error::OperationNotSupported {
                         verb: "line drawing",
@@ -1677,23 +1750,25 @@ pub trait Drawables2D {
                     Ok(unsafe { draw_rectangle_lines_ex(rect, line_thickness, color) })
                 }
             }
-            Shape::RoundedRectangle {
+            Shape2D::RoundedRectangle {
                 rect,
                 roundness,
                 segments,
             } => Ok(unsafe {
                 draw_rectangle_rounded_lines_ex(rect, roundness, segments, line_thickness, color)
             }),
-            Shape::Triangle { v1, v2, v3 } => Ok(unsafe { draw_triangle_lines(v1, v2, v3, color) }),
-            Shape::TriangleFan(_) => Err(Error::OperationNotSupported {
+            Shape2D::Triangle { v1, v2, v3 } => {
+                Ok(unsafe { draw_triangle_lines(v1, v2, v3, color) })
+            }
+            Shape2D::TriangleFan(_) => Err(Error::OperationNotSupported {
                 verb: "line drawing",
                 noun: "triangle fans",
             }),
-            Shape::TriangleStrip(_) => Err(Error::OperationNotSupported {
+            Shape2D::TriangleStrip(_) => Err(Error::OperationNotSupported {
                 verb: "line drawing",
                 noun: "triangle strips",
             }),
-            Shape::Polygon {
+            Shape2D::Polygon {
                 center,
                 sides,
                 radius,
@@ -1701,7 +1776,7 @@ pub trait Drawables2D {
             } => Ok(unsafe {
                 draw_poly_lines_ex(center, sides, radius, rotation, line_thickness, color)
             }),
-            Shape::Spline {
+            Shape2D::Spline {
                 spline_type,
                 points,
                 thickness,
@@ -1709,9 +1784,9 @@ pub trait Drawables2D {
         }
     }
 
-    fn draw_gradient_h(
+    fn draw_gradient_h<'t>(
         &mut self,
-        shape: impl Into<Shape>,
+        shape: impl Into<Shape2D<'t>>,
         start_color: impl Into<Color>,
         end_color: impl Into<Color>,
     ) -> Result<()> {
@@ -1719,7 +1794,7 @@ pub trait Drawables2D {
         let end_color = end_color.into();
 
         match shape.into() {
-            Shape::Rectangle { rect, rotation } => {
+            Shape2D::Rectangle { rect, rotation } => {
                 if let Some(_) = rotation {
                     Err(Error::OperationNotSupported {
                         verb: "gradient drawing",
@@ -1738,7 +1813,7 @@ pub trait Drawables2D {
                     })
                 }
             }
-            Shape::Circle { center, radius } => Ok(unsafe {
+            Shape2D::Circle { center, radius } => Ok(unsafe {
                 draw_circle_gradient(
                     center.x as i32,
                     center.y as i32,
@@ -1754,9 +1829,9 @@ pub trait Drawables2D {
         }
     }
 
-    fn draw_gradient_v(
+    fn draw_gradient_v<'t>(
         &mut self,
-        shape: impl Into<Shape>,
+        shape: impl Into<Shape2D<'t>>,
         start_color: impl Into<Color>,
         end_color: impl Into<Color>,
     ) -> Result<()> {
@@ -1764,7 +1839,7 @@ pub trait Drawables2D {
         let end_color = end_color.into();
 
         match shape.into() {
-            Shape::Rectangle { rect, rotation } => {
+            Shape2D::Rectangle { rect, rotation } => {
                 if let Some(_) = rotation {
                     Err(Error::OperationNotSupported {
                         verb: "gradient drawing",
@@ -1783,7 +1858,7 @@ pub trait Drawables2D {
                     })
                 }
             }
-            Shape::Circle { center, radius } => Ok(unsafe {
+            Shape2D::Circle { center, radius } => Ok(unsafe {
                 draw_circle_gradient(
                     center.x as i32,
                     center.y as i32,
@@ -2187,27 +2262,143 @@ impl<'a> Drawables2D for Drawing2D<'a> {}
 pub struct Drawing3D<'a>(MutexGuard<'a, ()>);
 
 impl<'a> Drawing3D<'a> {
-    pub fn draw_grid(&mut self, slices: i32, spacing: f32) {
-        unsafe { draw_grid(slices, spacing) }
-    }
-
-    pub fn draw_plane(&mut self, center: Vector3, size: Vector2, color: Color) {
-        unsafe { draw_plane(center, size, color) }
-    }
-
-    pub fn draw_cube(
+    pub fn draw_shape<'t>(
         &mut self,
-        position: Vector3,
-        width: f32,
-        height: f32,
-        length: f32,
-        color: Color,
-    ) {
-        unsafe { draw_cube(position, width, height, length, color) }
+        shape: impl Into<Shape3D<'t>>,
+        color: impl Into<Color>,
+    ) -> Result<()> {
+        match shape.into() {
+            Shape3D::Line(start, end) => Ok(unsafe { draw_line_3_d(start, end, color.into()) }),
+            Shape3D::Circle {
+                center,
+                radius,
+                rotation_axis,
+                rotation_angle,
+            } => Ok(unsafe {
+                draw_circle_3_d(center, radius, rotation_axis, rotation_angle, color.into())
+            }),
+            Shape3D::Triangle(v1, v2, v3) => {
+                Ok(unsafe { draw_triangle_3_d(v1, v2, v3, color.into()) })
+            }
+            Shape3D::TriangleStrip(points) => {
+                let ptr = points.as_ptr();
+                Ok(unsafe { draw_triangle_strip_3_d(ptr, points.len() as i32, color.into()) })
+            }
+            Shape3D::Cube { position, size } => {
+                Ok(unsafe { draw_cube_v(position, size, color.into()) })
+            }
+            Shape3D::Sphere { center, radius, .. } => {
+                Ok(unsafe { draw_sphere(center, radius, color.into()) })
+            }
+            Shape3D::Cylinder {
+                start_pos,
+                end_pos,
+                start_radius,
+                end_radius,
+                slices,
+            } => Ok(unsafe {
+                draw_cylinder_ex(
+                    start_pos,
+                    end_pos,
+                    start_radius,
+                    end_radius,
+                    slices as i32,
+                    color.into(),
+                )
+            }),
+            Shape3D::Capsule {
+                start_pos,
+                end_pos,
+                radius,
+                slices,
+                rings,
+            } => Ok(unsafe {
+                draw_capsule(
+                    start_pos,
+                    end_pos,
+                    radius,
+                    slices as i32,
+                    rings as i32,
+                    color.into(),
+                )
+            }),
+            Shape3D::Plane { center, size } => {
+                Ok(unsafe { draw_plane(center, size, color.into()) })
+            }
+            Shape3D::Grid { slices, spacing } => Ok(unsafe { draw_grid(slices as i32, spacing) }),
+            Shape3D::Ray(ray) => Ok(unsafe { draw_ray(ray, color.into()) }),
+        }
     }
 
-    pub fn draw_cubev(&mut self, position: Vector3, size: Vector3, color: Color) {
-        unsafe { draw_cube_v(position, size, color) }
+    pub fn draw_wires<'t>(
+        &mut self,
+        shape: impl Into<Shape3D<'t>>,
+        color: impl Into<Color>,
+    ) -> Result<()> {
+        match shape.into() {
+            Shape3D::Line(start, end) => Ok(unsafe { draw_line_3_d(start, end, color.into()) }),
+            Shape3D::Cube { position, size } => {
+                Ok(unsafe { draw_cube_wires_v(position, size, color.into()) })
+            }
+            Shape3D::Sphere {
+                center,
+                radius,
+                rings,
+                slices,
+            } => Ok(unsafe {
+                draw_sphere_wires(center, radius, rings as i32, slices as i32, color.into())
+            }),
+            Shape3D::Cylinder {
+                start_pos,
+                end_pos,
+                start_radius,
+                end_radius,
+                slices,
+            } => Ok(unsafe {
+                draw_cylinder_wires_ex(
+                    start_pos,
+                    end_pos,
+                    start_radius,
+                    end_radius,
+                    slices as i32,
+                    color.into(),
+                )
+            }),
+            Shape3D::Capsule {
+                start_pos,
+                end_pos,
+                radius,
+                slices,
+                rings,
+            } => Ok(unsafe {
+                draw_capsule_wires(
+                    start_pos,
+                    end_pos,
+                    radius,
+                    slices as i32,
+                    rings as i32,
+                    color.into(),
+                )
+            }),
+            Shape3D::Grid { slices, spacing } => Ok(unsafe { draw_grid(slices as i32, spacing) }),
+            Shape3D::Ray(ray) => Ok(unsafe { draw_ray(ray, color.into()) }),
+            Shape3D::Circle { .. } => Err(Error::OperationNotSupported {
+                verb: "wireframe drawing",
+                noun: "circles",
+            }),
+            Shape3D::Triangle(_, _, _) => Err(Error::OperationNotSupported {
+                verb: "wireframe drawing",
+                noun: "triangles",
+            }),
+            Shape3D::TriangleStrip(_) => Err(Error::OperationNotSupported {
+                verb: "wireframe drawing",
+                noun: "triangle strips",
+            }),
+            Shape3D::Plane { .. } => Err(Error::OperationNotSupported {
+                verb: "wireframe drawing",
+                noun: "planes",
+            }),
+        }
     }
 }
 

@@ -56,9 +56,10 @@ macro_rules! newtype {
 
         impl Drop for $alias {
             fn drop(&mut self) {
-                let ptr = ::std::ptr::addr_of_mut!(self.0);
                 unsafe {
-                    ::std::ptr::drop_in_place(ptr);
+                    let ptr = ::std::ptr::addr_of_mut!(self.0);
+                    let ptr = ptr.read();
+                    crate::sys::$drop(ptr);
                 }
             }
         }

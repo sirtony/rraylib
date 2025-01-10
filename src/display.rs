@@ -144,6 +144,38 @@ impl<'a> Window<'a> {
         unsafe { set_window_position(x, y) }
     }
 
+    pub fn width(&self) -> u32 {
+        unsafe { get_screen_width() as u32 }
+    }
+
+    pub fn height(&self) -> u32 {
+        unsafe { get_screen_height() as u32 }
+    }
+
+    pub fn size(&self) -> (u32, u32) {
+        (self.width(), self.height())
+    }
+
+    pub fn sizev(&self) -> Vector2 {
+        self.size().into()
+    }
+
+    pub fn render_width(&self) -> u32 {
+        unsafe { get_render_width() as u32 }
+    }
+
+    pub fn render_height(&self) -> u32 {
+        unsafe { get_render_height() as u32 }
+    }
+
+    pub fn render_size(&self) -> (u32, u32) {
+        (self.render_width(), self.render_height())
+    }
+
+    pub fn render_sizev(&self) -> Vector2 {
+        self.render_size().into()
+    }
+
     pub fn set_positionv(&mut self, pos: impl Into<Vector2>) {
         let pos = pos.into();
         unsafe { set_window_position(pos.x as i32, pos.y as i32) }
@@ -151,6 +183,10 @@ impl<'a> Window<'a> {
 
     pub fn set_monitor(&mut self, monitor: &Monitor) {
         unsafe { set_window_monitor(monitor.0 as i32) }
+    }
+
+    pub fn monitor(&self) -> Monitor {
+        Monitor::current()
     }
 
     pub fn set_min_size(&mut self, width: u32, height: u32) {
