@@ -1,6 +1,7 @@
 use crate::graphics::Color;
 use crate::math::{Rectangle, Vector2, Vector3};
 use crate::sys::*;
+use std::f64::consts::PI;
 use std::ptr::addr_of_mut;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -15,7 +16,7 @@ pub enum SplineType {
 impl SplineType {
     pub(crate) fn draw(
         &self,
-        points: impl Iterator<Item = Vector2> + ExactSizeIterator,
+        points: impl ExactSizeIterator<Item = Vector2>,
         thickness: f32,
         color: impl Into<Color>,
     ) {
@@ -89,7 +90,7 @@ pub enum Shape3D<'t> {
     Ray(Ray),
 }
 
-impl<'t> Shape3D<'t> {
+impl Shape3D<'_> {
     pub fn collides_with<'t2>(&self, other: impl Into<Shape3D<'t2>>) -> bool {
         let pair = (*self, other.into());
         match pair {
@@ -120,7 +121,7 @@ impl<'t> Shape3D<'t> {
     }
 }
 
-impl<'t> From<Ray> for Shape3D<'t> {
+impl From<Ray> for Shape3D<'_> {
     fn from(ray: Ray) -> Self {
         Self::Ray(ray)
     }
@@ -364,32 +365,32 @@ impl<'t> Shape2D<'t> {
                 ..
             } => match spline_type {
                 SplineType::Linear => {
-                    let p1 = points.get(0)?;
+                    let p1 = points.first()?;
                     let p2 = points.get(1)?;
                     Some(unsafe { get_spline_point_linear(*p1, *p2, t) })
                 }
                 SplineType::Basis => {
-                    let p1 = points.get(0)?;
+                    let p1 = points.first()?;
                     let p2 = points.get(1)?;
                     let p3 = points.get(2)?;
                     let p4 = points.get(3)?;
                     Some(unsafe { get_spline_point_basis(*p1, *p2, *p3, *p4, t) })
                 }
                 SplineType::CatmullRom => {
-                    let p1 = points.get(0)?;
+                    let p1 = points.first()?;
                     let p2 = points.get(1)?;
                     let p3 = points.get(2)?;
                     let p4 = points.get(3)?;
                     Some(unsafe { get_spline_point_catmull_rom(*p1, *p2, *p3, *p4, t) })
                 }
                 SplineType::Quadratic => {
-                    let p1 = points.get(0)?;
+                    let p1 = points.first()?;
                     let p2 = points.get(1)?;
                     let p3 = points.get(2)?;
                     Some(unsafe { get_spline_point_bezier_quad(*p1, *p2, *p3, t) })
                 }
                 SplineType::Cubic => {
-                    let p1 = points.get(0)?;
+                    let p1 = points.first()?;
                     let p2 = points.get(1)?;
                     let p3 = points.get(2)?;
                     let p4 = points.get(3)?;
@@ -401,7 +402,7 @@ impl<'t> Shape2D<'t> {
     }
 }
 
-impl<'t, T: Into<Rectangle>> From<T> for Shape2D<'t> {
+impl<T: Into<Rectangle>> From<T> for Shape2D<'_> {
     fn from(rect: T) -> Self {
         Self::Rectangle {
             rect: rect.into(),

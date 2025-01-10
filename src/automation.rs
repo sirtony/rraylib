@@ -9,7 +9,7 @@ pub struct AutomationPlayback<'a> {
     current_frame: u32,
 }
 
-impl<'a> AutomationPlayback<'a> {
+impl AutomationPlayback<'_> {
     pub fn update(&mut self) {
         if self.is_finished() {
             return;
@@ -44,6 +44,12 @@ crate::utils::newtype!(
     AutomationEventList as Automation,
     unload_automation_event_list
 );
+
+impl Default for Automation {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl Automation {
     pub fn new() -> Self {

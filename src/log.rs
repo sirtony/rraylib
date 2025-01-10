@@ -5,7 +5,7 @@ macro_rules! trace {
                 let msg = format!($msg $(, $args)*);
                 let msg = std::ffi::CString::new(msg)?;
                 unsafe {
-                    crate::sys::trace_log(crate::sys::LogLevel::Trace, msg.as_ptr());
+                    $crate::sys::trace_log($crate::sys::LogLevel::Trace, msg.as_ptr());
                 }
             }
         };
@@ -18,7 +18,7 @@ macro_rules! debug {
                 let msg = format!($msg $(, $args)*);
                 let msg = std::ffi::CString::new(msg)?;
                 unsafe {
-                    crate::sys::trace_log(crate::sys::LogLevel::Debug, msg.as_ptr());
+                    $crate::sys::trace_log($crate::sys::LogLevel::Debug, msg.as_ptr());
                 }
             }
         };
@@ -31,7 +31,7 @@ macro_rules! info {
                 let msg = format!($msg $(, $args)*);
                 let msg = std::ffi::CString::new(msg)?;
                 unsafe {
-                    crate::sys::trace_log(crate::sys::LogLevel::Info, msg.as_ptr());
+                    $crate::sys::trace_log($crate::sys::LogLevel::Info, msg.as_ptr());
                 }
             }
         };
@@ -44,7 +44,7 @@ macro_rules! warning {
                 let msg = format!($msg $(, $args)*);
                 let msg = std::ffi::CString::new(msg)?;
                 unsafe {
-                    crate::sys::trace_log(crate::sys::LogLevel::Warning, msg.as_ptr());
+                    $crate::sys::trace_log($crate::sys::LogLevel::Warning, msg.as_ptr());
                 }
             }
         };
@@ -57,7 +57,7 @@ macro_rules! error {
                 let msg = format!($msg $(, $args)*);
                 let msg = std::ffi::CString::new(msg)?;
                 unsafe {
-                    crate::sys::trace_log(crate::sys::LogLevel::Error, msg.as_ptr());
+                    $crate::sys::trace_log($crate::sys::LogLevel::Error, msg.as_ptr());
                 }
             }
         };

@@ -131,10 +131,10 @@ struct Package<'a> {
     dir: &'a Path,
 }
 
-impl<'a> Package<'a> {
+impl Package<'_> {
     fn download(&self) -> anyhow::Result<()> {
         let url = format!("{}/{}.zip", self.url, self.version);
-        let path = PathBuf::from(self.dir.join(self.zip_file_name()));
+        let path = self.dir.join(self.zip_file_name());
         let mut data = reqwest::blocking::get(&url)?;
         let mut file = File::create(&path)?;
 
@@ -145,7 +145,7 @@ impl<'a> Package<'a> {
     }
 
     fn extract(&self) -> anyhow::Result<()> {
-        let path = PathBuf::from(self.dir.join(self.zip_file_name()));
+        let path = self.dir.join(self.zip_file_name());
         let mut file = File::open(&path)?;
 
         zip_extract::extract(&mut file, self.dir, false)?;
@@ -205,8 +205,8 @@ fn main() -> anyhow::Result<()> {
         package.extract()?;
     }
 
-    const WRAPPER_H: &'static str = "wrapper.h";
-    const WRAPPER_C: &'static str = "wrapper.c";
+    const WRAPPER_H: &str = "wrapper.h";
+    const WRAPPER_C: &str = "wrapper.c";
 
     let mut file = File::create(dir.join(WRAPPER_H))?;
 
@@ -263,6 +263,7 @@ fn main() -> anyhow::Result<()> {
         .blocklist_var("^__glibc.*")
         .blocklist_var(".*?_H$")
         .blocklist_var("^__.*")
+        .blocklist_var("PI")
         .no_copy(no_copy)
         .disable_header_comment()
         .layout_tests(false)
@@ -275,7 +276,7 @@ fn main() -> anyhow::Result<()> {
 
     let text = std::str::from_utf8(&contents)?;
     let field_regex = Regex::new(r"pub ([A-Za-z]+): (.*?),")?;
-    let contents = field_regex.replace_all(&text, |caps: &regex::Captures| {
+    let contents = field_regex.replace_all(text, |caps: &regex::Captures| {
         let field = caps.get(1).unwrap().as_str();
         let ty = caps.get(2).unwrap().as_str();
 

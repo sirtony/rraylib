@@ -1,3 +1,5 @@
+#![allow(clippy::too_many_arguments)]
+
 use crate::error::Error;
 use crate::graphics::Drawing;
 use crate::shapes::Shape2D;
@@ -19,27 +21,38 @@ pub trait Drawables2D {
     ) -> crate::error::Result<()> {
         let color = color.into();
         match shape.into() {
-            Shape2D::Pixel(p) => Ok(unsafe { draw_pixel(p.x as i32, p.y as i32, color) }),
+            Shape2D::Pixel(p) => {
+                unsafe { draw_pixel(p.x as i32, p.y as i32, color) };
+                Ok(())
+            }
             Shape2D::Line {
                 start,
                 end,
                 thickness,
-            } => Ok(if let Some(thickness) = thickness {
-                unsafe { draw_line_ex(start, end, thickness, color) }
-            } else {
-                unsafe { draw_line_v(start, end, color) }
-            }),
+            } => {
+                if let Some(thickness) = thickness {
+                    unsafe { draw_line_ex(start, end, thickness, color) }
+                } else {
+                    unsafe { draw_line_v(start, end, color) }
+                };
+                Ok(())
+            }
             Shape2D::LineStrip(points) => {
                 let ptr = points.as_ptr();
-                Ok(unsafe { draw_line_strip(ptr, points.len() as i32, color) })
+                unsafe { draw_line_strip(ptr, points.len() as i32, color) };
+                Ok(())
             }
             Shape2D::Bezier {
                 start,
                 end,
                 thickness,
-            } => Ok(unsafe { draw_line_bezier(start, end, thickness, color) }),
+            } => {
+                unsafe { draw_line_bezier(start, end, thickness, color) };
+                Ok(())
+            }
             Shape2D::Circle { center, radius } => {
-                Ok(unsafe { draw_circle_v(center, radius, color) })
+                unsafe { draw_circle_v(center, radius, color) };
+                Ok(())
             }
             Shape2D::Pie {
                 center,
@@ -48,65 +61,89 @@ pub trait Drawables2D {
                 end_angle,
                 segments,
             } => unsafe {
-                Ok(draw_circle_sector(
+                draw_circle_sector(
                     center,
                     radius,
                     start_angle,
                     end_angle,
                     segments as i32,
                     color,
-                ))
+                );
+                Ok(())
             },
-            Shape2D::Ellipse { center, radius } => Ok(unsafe {
-                draw_ellipse(center.x as i32, center.y as i32, radius.x, radius.y, color)
-            }),
+            Shape2D::Ellipse { center, radius } => {
+                unsafe {
+                    draw_ellipse(center.x as i32, center.y as i32, radius.x, radius.y, color)
+                };
+                Ok(())
+            }
             Shape2D::Ring {
                 center,
                 inner_radius,
                 outer_radius,
                 angle,
                 segments,
-            } => Ok(unsafe {
-                draw_ring(
-                    center,
-                    inner_radius,
-                    outer_radius,
-                    angle.x,
-                    angle.y,
-                    segments as i32,
-                    color,
-                )
-            }),
-            Shape2D::Rectangle { rect, rotation } => Ok(if let Some(rotation) = rotation {
-                unsafe { draw_rectangle_pro(rect, rect.centerv(), rotation, color) }
-            } else {
-                unsafe { draw_rectangle_rec(rect, color) }
-            }),
+            } => {
+                unsafe {
+                    draw_ring(
+                        center,
+                        inner_radius,
+                        outer_radius,
+                        angle.x,
+                        angle.y,
+                        segments as i32,
+                        color,
+                    )
+                };
+                Ok(())
+            }
+            Shape2D::Rectangle { rect, rotation } => {
+                if let Some(rotation) = rotation {
+                    unsafe { draw_rectangle_pro(rect, rect.centerv(), rotation, color) }
+                } else {
+                    unsafe { draw_rectangle_rec(rect, color) }
+                };
+                Ok(())
+            }
             Shape2D::RoundedRectangle {
                 rect,
                 roundness,
                 segments,
-            } => Ok(unsafe { draw_rectangle_rounded(rect, roundness, segments, color) }),
-            Shape2D::Triangle { v1, v2, v3 } => Ok(unsafe { draw_triangle(v1, v2, v3, color) }),
+            } => {
+                unsafe { draw_rectangle_rounded(rect, roundness, segments, color) };
+                Ok(())
+            }
+            Shape2D::Triangle { v1, v2, v3 } => {
+                unsafe { draw_triangle(v1, v2, v3, color) };
+                Ok(())
+            }
             Shape2D::TriangleFan(points) => {
                 let ptr = points.as_ptr();
-                Ok(unsafe { draw_triangle_fan(ptr, points.len() as i32, color) })
+                unsafe { draw_triangle_fan(ptr, points.len() as i32, color) };
+                Ok(())
             }
             Shape2D::TriangleStrip(points) => {
                 let ptr = points.as_ptr();
-                Ok(unsafe { draw_triangle_strip(ptr, points.len() as i32, color) })
+                unsafe { draw_triangle_strip(ptr, points.len() as i32, color) };
+                Ok(())
             }
             Shape2D::Polygon {
                 center,
                 sides,
                 radius,
                 rotation,
-            } => Ok(unsafe { draw_poly(center, sides, radius, rotation, color) }),
+            } => {
+                unsafe { draw_poly(center, sides, radius, rotation, color) };
+                Ok(())
+            }
             Shape2D::Spline {
                 spline_type,
                 points,
                 thickness,
-            } => Ok(spline_type.draw(points.iter().copied(), thickness, color)),
+            } => {
+                spline_type.draw(points.iter().copied(), thickness, color);
+                Ok(())
+            }
         }
     }
 
@@ -119,27 +156,38 @@ pub trait Drawables2D {
         let line_thickness = line_thickness.unwrap_or(1.0);
         let color = color.into();
         match shape.into() {
-            Shape2D::Pixel(p) => Ok(unsafe { draw_pixel(p.x as i32, p.y as i32, color) }),
+            Shape2D::Pixel(p) => {
+                unsafe { draw_pixel(p.x as i32, p.y as i32, color) };
+                Ok(())
+            }
             Shape2D::Line {
                 start,
                 end,
                 thickness,
-            } => Ok(if let Some(thickness) = thickness {
-                unsafe { draw_line_ex(start, end, thickness, color) }
-            } else {
-                unsafe { draw_line_v(start, end, color) }
-            }),
+            } => {
+                if let Some(thickness) = thickness {
+                    unsafe { draw_line_ex(start, end, thickness, color) }
+                } else {
+                    unsafe { draw_line_v(start, end, color) }
+                };
+                Ok(())
+            }
             Shape2D::LineStrip(points) => {
                 let ptr = points.as_ptr();
-                Ok(unsafe { draw_line_strip(ptr, points.len() as i32, color) })
+                unsafe { draw_line_strip(ptr, points.len() as i32, color) };
+                Ok(())
             }
             Shape2D::Bezier {
                 start,
                 end,
                 thickness,
-            } => Ok(unsafe { draw_line_bezier(start, end, thickness, color) }),
+            } => {
+                unsafe { draw_line_bezier(start, end, thickness, color) };
+                Ok(())
+            }
             Shape2D::Circle { center, radius } => {
-                Ok(unsafe { draw_circle_lines_v(center, radius, color) })
+                unsafe { draw_circle_lines_v(center, radius, color) };
+                Ok(())
             }
             Shape2D::Pie {
                 center,
@@ -147,55 +195,75 @@ pub trait Drawables2D {
                 start_angle,
                 end_angle,
                 segments,
-            } => Ok(unsafe {
-                draw_circle_sector_lines(
-                    center,
-                    radius,
-                    start_angle,
-                    end_angle,
-                    segments as i32,
-                    color,
-                )
-            }),
-            Shape2D::Ellipse { center, radius } => Ok(unsafe {
-                draw_ellipse_lines(center.x as i32, center.y as i32, radius.x, radius.y, color)
-            }),
+            } => {
+                unsafe {
+                    draw_circle_sector_lines(
+                        center,
+                        radius,
+                        start_angle,
+                        end_angle,
+                        segments as i32,
+                        color,
+                    )
+                };
+                Ok(())
+            }
+            Shape2D::Ellipse { center, radius } => {
+                unsafe {
+                    draw_ellipse_lines(center.x as i32, center.y as i32, radius.x, radius.y, color)
+                };
+                Ok(())
+            }
             Shape2D::Ring {
                 center,
                 inner_radius,
                 outer_radius,
                 angle,
                 segments,
-            } => Ok(unsafe {
-                draw_ring_lines(
-                    center,
-                    inner_radius,
-                    outer_radius,
-                    angle.x,
-                    angle.y,
-                    segments as i32,
-                    color,
-                )
-            }),
+            } => {
+                unsafe {
+                    draw_ring_lines(
+                        center,
+                        inner_radius,
+                        outer_radius,
+                        angle.x,
+                        angle.y,
+                        segments as i32,
+                        color,
+                    )
+                };
+                Ok(())
+            }
             Shape2D::Rectangle { rect, rotation } => {
-                if let Some(_) = rotation {
+                if rotation.is_some() {
                     Err(Error::OperationNotSupported {
                         verb: "line drawing",
                         noun: "rotated rectangles",
                     })
                 } else {
-                    Ok(unsafe { draw_rectangle_lines_ex(rect, line_thickness, color) })
+                    unsafe { draw_rectangle_lines_ex(rect, line_thickness, color) };
+                    Ok(())
                 }
             }
             Shape2D::RoundedRectangle {
                 rect,
                 roundness,
                 segments,
-            } => Ok(unsafe {
-                draw_rectangle_rounded_lines_ex(rect, roundness, segments, line_thickness, color)
-            }),
+            } => {
+                unsafe {
+                    draw_rectangle_rounded_lines_ex(
+                        rect,
+                        roundness,
+                        segments,
+                        line_thickness,
+                        color,
+                    )
+                };
+                Ok(())
+            }
             Shape2D::Triangle { v1, v2, v3 } => {
-                Ok(unsafe { draw_triangle_lines(v1, v2, v3, color) })
+                unsafe { draw_triangle_lines(v1, v2, v3, color) };
+                Ok(())
             }
             Shape2D::TriangleFan(_) => Err(Error::OperationNotSupported {
                 verb: "line drawing",
@@ -210,14 +278,20 @@ pub trait Drawables2D {
                 sides,
                 radius,
                 rotation,
-            } => Ok(unsafe {
-                draw_poly_lines_ex(center, sides, radius, rotation, line_thickness, color)
-            }),
+            } => {
+                unsafe {
+                    draw_poly_lines_ex(center, sides, radius, rotation, line_thickness, color)
+                };
+                Ok(())
+            }
             Shape2D::Spline {
                 spline_type,
                 points,
                 thickness,
-            } => Ok(spline_type.draw(points.iter().copied(), thickness, color)),
+            } => {
+                spline_type.draw(points.iter().copied(), thickness, color);
+                Ok(())
+            }
         }
     }
 
@@ -232,13 +306,13 @@ pub trait Drawables2D {
 
         match shape.into() {
             Shape2D::Rectangle { rect, rotation } => {
-                if let Some(_) = rotation {
+                if rotation.is_some() {
                     Err(Error::OperationNotSupported {
                         verb: "gradient drawing",
                         noun: "rotated rectangles",
                     })
                 } else {
-                    Ok(unsafe {
+                    unsafe {
                         draw_rectangle_gradient_h(
                             rect.x as i32,
                             rect.y as i32,
@@ -247,18 +321,22 @@ pub trait Drawables2D {
                             start_color,
                             end_color,
                         )
-                    })
+                    };
+                    Ok(())
                 }
             }
-            Shape2D::Circle { center, radius } => Ok(unsafe {
-                draw_circle_gradient(
-                    center.x as i32,
-                    center.y as i32,
-                    radius,
-                    start_color,
-                    end_color,
-                )
-            }),
+            Shape2D::Circle { center, radius } => {
+                unsafe {
+                    draw_circle_gradient(
+                        center.x as i32,
+                        center.y as i32,
+                        radius,
+                        start_color,
+                        end_color,
+                    )
+                };
+                Ok(())
+            }
             _ => Err(Error::OperationNotSupported {
                 verb: "gradient drawing",
                 noun: "non-rectangle/non-circle shapes",
@@ -277,13 +355,13 @@ pub trait Drawables2D {
 
         match shape.into() {
             Shape2D::Rectangle { rect, rotation } => {
-                if let Some(_) = rotation {
+                if rotation.is_some() {
                     Err(Error::OperationNotSupported {
                         verb: "gradient drawing",
                         noun: "rotated rectangles",
                     })
                 } else {
-                    Ok(unsafe {
+                    unsafe {
                         draw_rectangle_gradient_v(
                             rect.x as i32,
                             rect.y as i32,
@@ -292,18 +370,22 @@ pub trait Drawables2D {
                             start_color,
                             end_color,
                         )
-                    })
+                    };
+                    Ok(())
                 }
             }
-            Shape2D::Circle { center, radius } => Ok(unsafe {
-                draw_circle_gradient(
-                    center.x as i32,
-                    center.y as i32,
-                    radius,
-                    start_color,
-                    end_color,
-                )
-            }),
+            Shape2D::Circle { center, radius } => {
+                unsafe {
+                    draw_circle_gradient(
+                        center.x as i32,
+                        center.y as i32,
+                        radius,
+                        start_color,
+                        end_color,
+                    )
+                };
+                Ok(())
+            }
             _ => Err(Error::OperationNotSupported {
                 verb: "gradient drawing",
                 noun: "non-rectangle/non-circle shapes",
@@ -318,7 +400,8 @@ pub trait Drawables2D {
         tint: impl Into<Color>,
     ) -> crate::error::Result<()> {
         let position = position.into();
-        Ok(unsafe { draw_texture_v(texture.as_raw(), position, tint.into()) })
+        unsafe { draw_texture_v(texture.as_raw(), position, tint.into()) };
+        Ok(())
     }
 
     fn draw_texture_ex(
@@ -330,15 +413,8 @@ pub trait Drawables2D {
         tint: impl Into<Color>,
     ) -> crate::error::Result<()> {
         let position = position.into();
-        Ok(unsafe {
-            draw_texture_ex(
-                texture.as_raw(),
-                position.into(),
-                rotation,
-                scale,
-                tint.into(),
-            )
-        })
+        unsafe { draw_texture_ex(texture.as_raw(), position, rotation, scale, tint.into()) };
+        Ok(())
     }
 
     fn draw_texture_clipped(
@@ -348,7 +424,8 @@ pub trait Drawables2D {
         pos: impl Into<Vector2>,
         tint: impl Into<Color>,
     ) -> crate::error::Result<()> {
-        Ok(unsafe { draw_texture_rec(texture.as_raw(), src.into(), pos.into(), tint.into()) })
+        unsafe { draw_texture_rec(texture.as_raw(), src.into(), pos.into(), tint.into()) };
+        Ok(())
     }
 
     fn draw_texture_rotated(
@@ -360,7 +437,7 @@ pub trait Drawables2D {
         rotation: f32,
         tint: impl Into<Color>,
     ) -> crate::error::Result<()> {
-        Ok(unsafe {
+        unsafe {
             draw_texture_pro(
                 texture.as_raw(),
                 src.into(),
@@ -369,7 +446,8 @@ pub trait Drawables2D {
                 rotation,
                 tint.into(),
             )
-        })
+        };
+        Ok(())
     }
 
     fn draw_texture_npatched(
@@ -381,7 +459,7 @@ pub trait Drawables2D {
         rotation: f32,
         tint: impl Into<Color>,
     ) -> crate::error::Result<()> {
-        Ok(unsafe {
+        unsafe {
             draw_texture_n_patch(
                 texture.as_raw(),
                 info.into(),
@@ -390,7 +468,8 @@ pub trait Drawables2D {
                 rotation,
                 tint.into(),
             )
-        })
+        };
+        Ok(())
     }
 
     fn draw_text(
@@ -405,7 +484,8 @@ pub trait Drawables2D {
         let pos = pos.into();
         let (x, y): (i32, i32) = pos.into();
 
-        Ok(unsafe { draw_text(text.as_ptr(), x, y, font_size as i32, color.into()) })
+        unsafe { draw_text(text.as_ptr(), x, y, font_size as i32, color.into()) };
+        Ok(())
     }
 
     fn draw_text_ex(
@@ -420,7 +500,7 @@ pub trait Drawables2D {
         let text = text.as_ref().as_bytes();
         let text = CString::new(text)?;
 
-        Ok(unsafe {
+        unsafe {
             draw_text_ex(
                 font.as_raw(),
                 text.as_ptr(),
@@ -429,7 +509,8 @@ pub trait Drawables2D {
                 spacing,
                 tint.into(),
             )
-        })
+        };
+        Ok(())
     }
 
     fn draw_text_rotated(
@@ -446,7 +527,7 @@ pub trait Drawables2D {
         let text = text.as_ref().as_bytes();
         let text = CString::new(text)?;
 
-        Ok(unsafe {
+        unsafe {
             draw_text_pro(
                 font.as_raw(),
                 text.as_ptr(),
@@ -457,7 +538,8 @@ pub trait Drawables2D {
                 spacing,
                 tint.into(),
             )
-        })
+        };
+        Ok(())
     }
 
     fn clear_background(&mut self, color: impl Into<Color>) {
@@ -465,7 +547,7 @@ pub trait Drawables2D {
     }
 }
 
-impl<'a> Drawing<'a> {
+impl Drawing<'_> {
     pub fn draw_fps(&mut self, x: i32, y: i32) {
         unsafe { draw_fps(x, y) }
     }
@@ -507,7 +589,7 @@ impl<'a> Drawing<'a> {
 #[allow(dead_code)]
 pub struct Drawing2D<'a>(MutexGuard<'a, ()>);
 
-impl<'a> Drawables2D for Drawing2D<'a> {}
+impl Drawables2D for Drawing2D<'_> {}
 
 impl Drop for Drawing2D<'_> {
     fn drop(&mut self) {
@@ -518,7 +600,7 @@ impl Drop for Drawing2D<'_> {
 #[allow(dead_code)]
 pub struct DrawingTexture<'a>(MutexGuard<'a, ()>);
 
-impl<'a> Drawables2D for DrawingTexture<'a> {}
+impl Drawables2D for DrawingTexture<'_> {}
 
 impl Drop for DrawingTexture<'_> {
     fn drop(&mut self) {
@@ -570,7 +652,7 @@ impl Texture {
     pub fn update_ex(&mut self, rec: impl Into<Rectangle>, pixels: impl AsRef<[u8]>) {
         let rec = rec.into();
         let data = pixels.as_ref();
-        unsafe { update_texture_rec(self.as_raw(), rec.into(), data.as_ptr() as *const c_void) }
+        unsafe { update_texture_rec(self.as_raw(), rec, data.as_ptr() as *const c_void) }
     }
 
     pub fn compute_mipmaps(&mut self) {
@@ -651,8 +733,8 @@ impl Default for Camera2D {
     }
 }
 
-impl Into<Matrix> for Camera2D {
-    fn into(self) -> Matrix {
-        unsafe { get_camera_matrix_2d(self) }
+impl From<Camera2D> for Matrix {
+    fn from(val: Camera2D) -> Self {
+        unsafe { get_camera_matrix_2d(val) }
     }
 }

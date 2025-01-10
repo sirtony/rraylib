@@ -43,7 +43,7 @@ pub struct SoundAlias<'a> {
     _lifetime: std::marker::PhantomData<&'a ()>,
 }
 
-impl<'a> Drop for SoundAlias<'a> {
+impl Drop for SoundAlias<'_> {
     fn drop(&mut self) {
         let ptr = addr_of!(self.alias);
         unsafe { unload_sound_alias(ptr.read()) };
@@ -71,7 +71,7 @@ impl<'a> AudioDevice<'a> {
     }
 }
 
-impl<'a> Drop for AudioDevice<'a> {
+impl Drop for AudioDevice<'_> {
     fn drop(&mut self) {
         if self.is_ready() {
             unsafe { close_audio_device() };
@@ -107,7 +107,7 @@ impl Wave {
         let mut vec = Vec::with_capacity(len);
 
         for i in 0..len {
-            let sample = unsafe { samples.offset(i as isize) };
+            let sample = unsafe { samples.add(i) };
             if sample.is_null() {
                 break;
             }
@@ -292,7 +292,7 @@ impl AudioStream {
         F: FnMut(&mut [f32], u32),
     {
         let wrapper = Self::wrap_fn_ptr(processor);
-        unsafe { attach_audio_stream_processor(self.as_raw(), wrapper.clone()) };
+        unsafe { attach_audio_stream_processor(self.as_raw(), wrapper) };
 
         Processor {
             stream: Some(self),
@@ -305,7 +305,7 @@ impl AudioStream {
         F: FnMut(&mut [f32], u32),
     {
         let wrapper = Self::wrap_fn_ptr(processor);
-        unsafe { attach_audio_mixed_processor(wrapper.clone()) };
+        unsafe { attach_audio_mixed_processor(wrapper) };
 
         Processor {
             stream: None,

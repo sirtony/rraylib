@@ -28,7 +28,7 @@ macro_rules! window_flag {
 
 guarded!(Window);
 
-impl<'a> Window<'a> {
+impl Window<'_> {
     pub fn close_requested(&self) -> bool {
         unsafe { window_should_close() }
     }
@@ -273,7 +273,7 @@ impl<'a> Window<'a> {
 
     pub fn screenshot(&self, filename: impl AsRef<Path>) -> Result<()> {
         let filename = filename.as_ref().as_os_str().as_encoded_bytes();
-        let filename = CString::new(filename.as_ref())?;
+        let filename = CString::new(filename)?;
         unsafe { take_screenshot(filename.as_ptr()) }
         Ok(())
     }

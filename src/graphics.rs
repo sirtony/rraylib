@@ -1,5 +1,7 @@
-use crate::drawing2d::{Drawables2D, Texture};
-use crate::shapes::Shape2D;
+use crate::drawing2d::Texture;
+pub use crate::drawing2d::*;
+pub use crate::drawing3d::*;
+pub use crate::shapes::*;
 use crate::sys::*;
 pub use crate::sys::{Camera2D, Camera3D, CameraMode, CameraProjection, Color};
 use crate::{guarded, newtype, try_lock, Error, Result};
@@ -505,6 +507,14 @@ impl Image {
         }
     }
 
+    /**
+        Returns the raw pointer to the underlying raylib type.
+        # Safety
+        This method is unsafe because it allows the caller to access the underlying pointer directly.
+
+        The caller must not free the pointer manually, allow the wrapper type to be dropped (resulting in a dangling pointer),
+        or use the pointer to perform interior mutability unless first ensuring that the pointer is not currently in use elsewhere.
+    */
     pub unsafe fn as_raw(&self) -> crate::sys::Image {
         let ptr = addr_of!(self.img);
         ptr.read()
@@ -537,16 +547,22 @@ impl Drawables2D for Image {
         let img_ptr = addr_of_mut!(self.img);
 
         match shape.into() {
-            Shape2D::Pixel(p) => Ok(unsafe { draw_pixel(p.x as i32, p.y as i32, color) }),
+            Shape2D::Pixel(p) => {
+                unsafe { draw_pixel(p.x as i32, p.y as i32, color) };
+                Ok(())
+            }
             Shape2D::Line {
                 start,
                 end,
                 thickness,
-            } => Ok(if let Some(thickness) = thickness {
-                unsafe { image_draw_line_ex(img_ptr, start, end, thickness as i32, color) }
-            } else {
-                unsafe { image_draw_line_v(img_ptr, start, end, color) }
-            }),
+            } => {
+                if let Some(thickness) = thickness {
+                    unsafe { image_draw_line_ex(img_ptr, start, end, thickness as i32, color) }
+                } else {
+                    unsafe { image_draw_line_v(img_ptr, start, end, color) }
+                };
+                Ok(())
+            }
             Shape2D::LineStrip(points) => {
                 // there is no line strip function for images, so implement it manually
                 for i in 0..points.len() - 1 {
@@ -558,36 +574,41 @@ impl Drawables2D for Image {
                 Ok(())
             }
             Shape2D::Circle { center, radius } => {
-                Ok(unsafe { image_draw_circle_v(img_ptr, center, radius as i32, color) })
+                unsafe { image_draw_circle_v(img_ptr, center, radius as i32, color) };
+                Ok(())
             }
             Shape2D::Rectangle { rect, rotation } => {
-                if let Some(_) = rotation {
+                if rotation.is_some() {
                     Err(Error::OperationNotSupported {
                         verb: "shape drawing",
                         noun: "rotated rectangles",
                     })
                 } else {
-                    Ok(unsafe { image_draw_rectangle_rec(img_ptr, rect, color) })
+                    unsafe { image_draw_rectangle_rec(img_ptr, rect, color) };
+                    Ok(())
                 }
             }
             Shape2D::Triangle { v1, v2, v3 } => {
-                Ok(unsafe { image_draw_triangle(img_ptr, v1, v2, v3, color) })
+                unsafe { image_draw_triangle(img_ptr, v1, v2, v3, color) };
+                Ok(())
             }
             Shape2D::TriangleFan(points) => {
                 let ptr = points.as_ptr();
                 // casting away the const-ness of the pointer is safe because the pointer is only being read
                 // and the `*mut Vector2` pointer in the function signature was generated in error
                 // because the C API doesn't mark the pointer as const even though it's not written to
-                Ok(unsafe {
+                unsafe {
                     image_draw_triangle_fan(img_ptr, ptr as *mut _, points.len() as i32, color)
-                })
+                };
+                Ok(())
             }
             Shape2D::TriangleStrip(points) => {
                 let ptr = points.as_ptr();
                 // ditto
-                Ok(unsafe {
+                unsafe {
                     image_draw_triangle_strip(img_ptr, ptr as *mut _, points.len() as i32, color)
-                })
+                };
+                Ok(())
             }
 
             Shape2D::Bezier { .. } => Err(Error::OperationNotSupported {
@@ -632,17 +653,21 @@ impl Drawables2D for Image {
         let img_ptr = addr_of_mut!(self.img);
         match shape.into() {
             Shape2D::Pixel(p) => {
-                Ok(unsafe { image_draw_pixel(img_ptr, p.x as i32, p.y as i32, color) })
+                unsafe { image_draw_pixel(img_ptr, p.x as i32, p.y as i32, color) };
+                Ok(())
             }
             Shape2D::Line {
                 start,
                 end,
                 thickness,
-            } => Ok(if let Some(thickness) = thickness {
-                unsafe { image_draw_line_ex(img_ptr, start, end, thickness as i32, color) }
-            } else {
-                unsafe { image_draw_line_v(img_ptr, start, end, color) }
-            }),
+            } => {
+                if let Some(thickness) = thickness {
+                    unsafe { image_draw_line_ex(img_ptr, start, end, thickness as i32, color) }
+                } else {
+                    unsafe { image_draw_line_v(img_ptr, start, end, color) }
+                };
+                Ok(())
+            }
             Shape2D::LineStrip(points) => {
                 // there is no line strip function for images, so implement it manually
                 for i in 0..points.len() - 1 {
@@ -654,22 +679,25 @@ impl Drawables2D for Image {
                 Ok(())
             }
             Shape2D::Circle { center, radius } => {
-                Ok(unsafe { image_draw_circle_lines_v(img_ptr, center, radius as i32, color) })
+                unsafe { image_draw_circle_lines_v(img_ptr, center, radius as i32, color) };
+                Ok(())
             }
             Shape2D::Rectangle { rect, rotation } => {
-                if let Some(_) = rotation {
+                if rotation.is_some() {
                     Err(Error::OperationNotSupported {
                         verb: "line drawing",
                         noun: "rotated rectangles",
                     })
                 } else {
-                    Ok(unsafe {
+                    unsafe {
                         image_draw_rectangle_lines(img_ptr, rect, line_thickness as i32, color)
-                    })
+                    };
+                    Ok(())
                 }
             }
             Shape2D::Triangle { v1, v2, v3 } => {
-                Ok(unsafe { draw_triangle_lines(v1, v2, v3, color) })
+                unsafe { draw_triangle_lines(v1, v2, v3, color) };
+                Ok(())
             }
             Shape2D::TriangleFan(_) => Err(Error::OperationNotSupported {
                 verb: "line drawing",
@@ -816,7 +844,8 @@ impl Drawables2D for Image {
         let pos = pos.into();
         let (x, y): (i32, i32) = pos.into();
 
-        Ok(unsafe { image_draw_text(ptr, text.as_ptr(), x, y, font_size as i32, color.into()) })
+        unsafe { image_draw_text(ptr, text.as_ptr(), x, y, font_size as i32, color.into()) };
+        Ok(())
     }
 
     fn draw_text_ex(
@@ -832,7 +861,7 @@ impl Drawables2D for Image {
         let text = text.as_ref().as_bytes();
         let text = CString::new(text)?;
 
-        Ok(unsafe {
+        unsafe {
             image_draw_text_ex(
                 ptr,
                 font.as_raw(),
@@ -842,7 +871,8 @@ impl Drawables2D for Image {
                 spacing,
                 tint.into(),
             )
-        })
+        };
+        Ok(())
     }
 
     fn draw_text_rotated(
@@ -961,7 +991,7 @@ impl Shader {
 
 guarded!(Drawing, drawing, shaded, viewport, blended);
 
-impl<'a> Drawing<'a> {
+impl Drawing<'_> {
     pub fn begin_shader_mode(&mut self, shader: &Shader) -> Result<DrawingShaded> {
         let guard = try_lock!(self.shaded).ok_or(Error::ThreadAlreadyLocked("drawing"))?;
         unsafe { begin_shader_mode(shader.as_raw()) }
@@ -1125,13 +1155,13 @@ impl<'a> Drawing<'a> {
     }
 }
 
-impl<'a> Drop for Drawing<'a> {
+impl Drop for Drawing<'_> {
     fn drop(&mut self) {
         unsafe { end_drawing() }
     }
 }
 
-impl<'a> Drawables2D for Drawing<'a> {}
+impl Drawables2D for Drawing<'_> {}
 
 #[allow(dead_code)]
 pub struct DrawingShaded<'a>(MutexGuard<'a, ()>);
@@ -1365,9 +1395,9 @@ impl From<i32> for Color {
     }
 }
 
-impl Into<i32> for Color {
-    fn into(self) -> i32 {
-        unsafe { color_to_int(self) }
+impl From<Color> for i32 {
+    fn from(val: Color) -> Self {
+        unsafe { color_to_int(val) }
     }
 }
 
@@ -1377,9 +1407,9 @@ impl From<u32> for Color {
     }
 }
 
-impl Into<u32> for Color {
-    fn into(self) -> u32 {
-        unsafe { color_to_int(self) as u32 }
+impl From<Color> for u32 {
+    fn from(val: Color) -> Self {
+        unsafe { color_to_int(val) as u32 }
     }
 }
 
@@ -1389,9 +1419,9 @@ impl From<(u8, u8, u8, u8)> for Color {
     }
 }
 
-impl Into<(u8, u8, u8, u8)> for Color {
-    fn into(self) -> (u8, u8, u8, u8) {
-        (self.r, self.g, self.b, self.a)
+impl From<Color> for (u8, u8, u8, u8) {
+    fn from(val: Color) -> Self {
+        (val.r, val.g, val.b, val.a)
     }
 }
 
@@ -1401,9 +1431,9 @@ impl From<(u8, u8, u8)> for Color {
     }
 }
 
-impl Into<(u8, u8, u8)> for Color {
-    fn into(self) -> (u8, u8, u8) {
-        (self.r, self.g, self.b)
+impl From<Color> for (u8, u8, u8) {
+    fn from(val: Color) -> Self {
+        (val.r, val.g, val.b)
     }
 }
 
@@ -1413,9 +1443,9 @@ impl From<[u8; 3]> for Color {
     }
 }
 
-impl Into<[u8; 3]> for Color {
-    fn into(self) -> [u8; 3] {
-        [self.r, self.g, self.b]
+impl From<Color> for [u8; 3] {
+    fn from(val: Color) -> Self {
+        [val.r, val.g, val.b]
     }
 }
 
@@ -1425,9 +1455,9 @@ impl From<[u8; 4]> for Color {
     }
 }
 
-impl Into<[u8; 4]> for Color {
-    fn into(self) -> [u8; 4] {
-        [self.r, self.g, self.b, self.a]
+impl From<Color> for [u8; 4] {
+    fn from(val: Color) -> Self {
+        [val.r, val.g, val.b, val.a]
     }
 }
 

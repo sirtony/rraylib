@@ -1,3 +1,5 @@
+#![allow(clippy::missing_transmute_annotations)]
+
 use crate::sys::*;
 use crate::Result;
 use std::ffi::CString;
@@ -36,7 +38,8 @@ pub struct CompoundKey {
 }
 
 impl CompoundKey {
-    pub fn new(key: Key) -> CompoundKeyBuilder<((Key,), (), (), (), (), (), (), (), ())> {
+    #[allow(clippy::type_complexity)]
+    pub fn from(key: Key) -> CompoundKeyBuilder<((Key,), (), (), (), (), (), (), (), ())> {
         CompoundKey::builder().key(key)
     }
 
@@ -275,7 +278,7 @@ impl Mouse {
     }
 
     pub fn set_offset(x: i32, y: i32) {
-        unsafe { set_mouse_offset(x as i32, y as i32) }
+        unsafe { set_mouse_offset(x, y) }
     }
 
     pub fn set_offsetv(offset: impl Into<Vector2>) {

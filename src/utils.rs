@@ -26,40 +26,48 @@ pub use try_lock;
 #[macro_export]
 macro_rules! newtype {
     ( $name: ident ) => {
-        crate::utils::newtype!($name as $name);
+        $crate::utils::newtype!($name as $name);
     };
 
     ( $name: ident as $alias: ident ) => {
         #[derive(Debug)]
-        pub struct $alias(crate::sys::$name);
+        pub struct $alias($crate::sys::$name);
 
         impl $alias {
-            pub unsafe fn as_raw(&self) -> crate::sys::$name {
+            /**
+                Returns the raw pointer to the underlying raylib type.
+                # Safety
+                This method is unsafe because it allows the caller to access the underlying pointer directly.
+
+                The caller must not free the pointer manually, allow the wrapper type to be dropped (resulting in a dangling pointer),
+                or use the pointer to perform interior mutability unless first ensuring that the pointer is not currently in use elsewhere.
+            */
+            pub unsafe fn as_raw(&self) -> $crate::sys::$name {
                 let ptr = ::std::ptr::addr_of!(self.0);
                 ::std::ptr::read(ptr)
             }
         }
 
-        impl From<crate::sys::$name> for $alias {
-            fn from(inner: crate::sys::$name) -> Self {
+        impl From<$crate::sys::$name> for $alias {
+            fn from(inner: $crate::sys::$name) -> Self {
                 Self(inner)
             }
         }
     };
 
     ( $name: ident, $drop: ident ) => {
-        crate::utils::newtype!($name as $name, $drop);
+        $crate::utils::newtype!($name as $name, $drop);
     };
 
     ( $name: ident as $alias: ident, $drop: ident ) => {
-        crate::utils::newtype!($name as $alias);
+        $crate::utils::newtype!($name as $alias);
 
         impl Drop for $alias {
             fn drop(&mut self) {
                 unsafe {
                     let ptr = ::std::ptr::addr_of_mut!(self.0);
                     let ptr = ptr.read();
-                    crate::sys::$drop(ptr);
+                    $crate::sys::$drop(ptr);
                 }
             }
         }
@@ -89,6 +97,12 @@ macro_rules! guarded {
     ( base $tn: ident $( ,$name: ident )* ) => {
         pub struct $tn {
             $( $name: ::std::sync::Mutex<()> ),*
+        }
+
+        impl Default for $tn {
+            fn default() -> Self {
+                Self::new()
+            }
         }
 
         impl $tn {

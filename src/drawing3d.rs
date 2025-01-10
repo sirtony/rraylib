@@ -1,3 +1,5 @@
+#![allow(clippy::too_many_arguments)]
+
 use crate::drawing2d::Texture;
 use crate::error::{Error, Result};
 use crate::graphics::Drawing;
@@ -23,27 +25,37 @@ pub trait Drawables3D {
         color: impl Into<Color>,
     ) -> crate::error::Result<()> {
         match shape.into() {
-            Shape3D::Line(start, end) => Ok(unsafe { draw_line_3_d(start, end, color.into()) }),
+            Shape3D::Line(start, end) => {
+                unsafe { draw_line_3_d(start, end, color.into()) };
+                Ok(())
+            }
             Shape3D::Circle {
                 center,
                 radius,
                 rotation_axis,
                 rotation_angle,
-            } => Ok(unsafe {
-                draw_circle_3_d(center, radius, rotation_axis, rotation_angle, color.into())
-            }),
+            } => {
+                unsafe {
+                    draw_circle_3_d(center, radius, rotation_axis, rotation_angle, color.into())
+                };
+                Ok(())
+            }
             Shape3D::Triangle(v1, v2, v3) => {
-                Ok(unsafe { draw_triangle_3_d(v1, v2, v3, color.into()) })
+                unsafe { draw_triangle_3_d(v1, v2, v3, color.into()) };
+                Ok(())
             }
             Shape3D::TriangleStrip(points) => {
                 let ptr = points.as_ptr();
-                Ok(unsafe { draw_triangle_strip_3_d(ptr, points.len() as i32, color.into()) })
+                unsafe { draw_triangle_strip_3_d(ptr, points.len() as i32, color.into()) };
+                Ok(())
             }
             Shape3D::Cube { position, size } => {
-                Ok(unsafe { draw_cube_v(position, size, color.into()) })
+                unsafe { draw_cube_v(position, size, color.into()) };
+                Ok(())
             }
             Shape3D::Sphere { center, radius, .. } => {
-                Ok(unsafe { draw_sphere(center, radius, color.into()) })
+                unsafe { draw_sphere(center, radius, color.into()) };
+                Ok(())
             }
             Shape3D::Cylinder {
                 start_pos,
@@ -51,37 +63,50 @@ pub trait Drawables3D {
                 start_radius,
                 end_radius,
                 slices,
-            } => Ok(unsafe {
-                draw_cylinder_ex(
-                    start_pos,
-                    end_pos,
-                    start_radius,
-                    end_radius,
-                    slices as i32,
-                    color.into(),
-                )
-            }),
+            } => {
+                unsafe {
+                    draw_cylinder_ex(
+                        start_pos,
+                        end_pos,
+                        start_radius,
+                        end_radius,
+                        slices as i32,
+                        color.into(),
+                    )
+                };
+                Ok(())
+            }
             Shape3D::Capsule {
                 start_pos,
                 end_pos,
                 radius,
                 slices,
                 rings,
-            } => Ok(unsafe {
-                draw_capsule(
-                    start_pos,
-                    end_pos,
-                    radius,
-                    slices as i32,
-                    rings as i32,
-                    color.into(),
-                )
-            }),
-            Shape3D::Plane { center, size } => {
-                Ok(unsafe { draw_plane(center, size, color.into()) })
+            } => {
+                unsafe {
+                    draw_capsule(
+                        start_pos,
+                        end_pos,
+                        radius,
+                        slices as i32,
+                        rings as i32,
+                        color.into(),
+                    )
+                };
+                Ok(())
             }
-            Shape3D::Grid { slices, spacing } => Ok(unsafe { draw_grid(slices as i32, spacing) }),
-            Shape3D::Ray(ray) => Ok(unsafe { draw_ray(ray, color.into()) }),
+            Shape3D::Plane { center, size } => {
+                unsafe { draw_plane(center, size, color.into()) };
+                Ok(())
+            }
+            Shape3D::Grid { slices, spacing } => {
+                unsafe { draw_grid(slices as i32, spacing) };
+                Ok(())
+            }
+            Shape3D::Ray(ray) => {
+                unsafe { draw_ray(ray, color.into()) };
+                Ok(())
+            }
         }
     }
 
@@ -91,52 +116,71 @@ pub trait Drawables3D {
         color: impl Into<Color>,
     ) -> crate::error::Result<()> {
         match shape.into() {
-            Shape3D::Line(start, end) => Ok(unsafe { draw_line_3_d(start, end, color.into()) }),
+            Shape3D::Line(start, end) => {
+                unsafe { draw_line_3_d(start, end, color.into()) };
+                Ok(())
+            }
             Shape3D::Cube { position, size } => {
-                Ok(unsafe { draw_cube_wires_v(position, size, color.into()) })
+                unsafe { draw_cube_wires_v(position, size, color.into()) };
+                Ok(())
             }
             Shape3D::Sphere {
                 center,
                 radius,
                 rings,
                 slices,
-            } => Ok(unsafe {
-                draw_sphere_wires(center, radius, rings as i32, slices as i32, color.into())
-            }),
+            } => {
+                unsafe {
+                    draw_sphere_wires(center, radius, rings as i32, slices as i32, color.into())
+                };
+                Ok(())
+            }
             Shape3D::Cylinder {
                 start_pos,
                 end_pos,
                 start_radius,
                 end_radius,
                 slices,
-            } => Ok(unsafe {
-                draw_cylinder_wires_ex(
-                    start_pos,
-                    end_pos,
-                    start_radius,
-                    end_radius,
-                    slices as i32,
-                    color.into(),
-                )
-            }),
+            } => {
+                unsafe {
+                    draw_cylinder_wires_ex(
+                        start_pos,
+                        end_pos,
+                        start_radius,
+                        end_radius,
+                        slices as i32,
+                        color.into(),
+                    )
+                };
+                Ok(())
+            }
             Shape3D::Capsule {
                 start_pos,
                 end_pos,
                 radius,
                 slices,
                 rings,
-            } => Ok(unsafe {
-                draw_capsule_wires(
-                    start_pos,
-                    end_pos,
-                    radius,
-                    slices as i32,
-                    rings as i32,
-                    color.into(),
-                )
-            }),
-            Shape3D::Grid { slices, spacing } => Ok(unsafe { draw_grid(slices as i32, spacing) }),
-            Shape3D::Ray(ray) => Ok(unsafe { draw_ray(ray, color.into()) }),
+            } => {
+                unsafe {
+                    draw_capsule_wires(
+                        start_pos,
+                        end_pos,
+                        radius,
+                        slices as i32,
+                        rings as i32,
+                        color.into(),
+                    )
+                };
+                Ok(())
+            }
+            Shape3D::Grid { slices, spacing } => {
+                unsafe { draw_grid(slices as i32, spacing) };
+                Ok(())
+            }
+            Shape3D::Ray(ray) => {
+                unsafe { draw_ray(ray, color.into()) };
+                Ok(())
+            }
             Shape3D::Circle { .. } => Err(Error::OperationNotSupported {
                 verb: "wireframe drawing",
                 noun: "circles",
@@ -260,7 +304,7 @@ pub trait Drawables3D {
                 *camera,
                 texture.as_raw(),
                 position.into(),
-                scale.into(),
+                scale,
                 tint.into(),
             )
         }
@@ -341,7 +385,7 @@ pub trait Drawables3D {
     }
 }
 
-impl<'a> Drawing<'a> {
+impl Drawing<'_> {
     pub fn begin_mode3d(&mut self, camera: &Camera3D) -> crate::error::Result<Drawing3D> {
         let guard = try_lock!(self.drawing).ok_or(Error::ThreadAlreadyLocked("drawing"))?;
         unsafe { begin_mode_3d(*camera) }
@@ -379,7 +423,7 @@ impl<'a> Drawing<'a> {
 #[allow(dead_code)]
 pub struct Drawing3D<'a>(MutexGuard<'a, ()>);
 
-impl<'a> Drawables3D for Drawing3D<'a> {}
+impl Drawables3D for Drawing3D<'_> {}
 
 impl Drop for Drawing3D<'_> {
     fn drop(&mut self) {
@@ -390,7 +434,7 @@ impl Drop for Drawing3D<'_> {
 #[allow(dead_code)]
 pub struct DrawingVr<'a>(MutexGuard<'a, ()>);
 
-impl<'a> Drawables3D for DrawingVr<'a> {}
+impl Drawables3D for DrawingVr<'_> {}
 
 impl Drop for DrawingVr<'_> {
     fn drop(&mut self) {
@@ -500,9 +544,9 @@ impl Camera {
     }
 }
 
-impl Into<Matrix> for Camera {
-    fn into(self) -> Matrix {
-        unsafe { get_camera_matrix(self) }
+impl From<Camera> for Matrix {
+    fn from(val: Camera) -> Self {
+        unsafe { get_camera_matrix(val) }
     }
 }
 

@@ -141,11 +141,11 @@ impl From<(Vector2, Vector2)> for Rectangle {
     }
 }
 
-impl Into<(Vector2, Vector2)> for Rectangle {
-    fn into(self) -> (Vector2, Vector2) {
+impl From<Rectangle> for (Vector2, Vector2) {
+    fn from(val: Rectangle) -> Self {
         (
-            Vector2::new(self.x, self.y),
-            Vector2::new(self.width, self.height),
+            Vector2::new(val.x, val.y),
+            Vector2::new(val.width, val.height),
         )
     }
 }
@@ -161,11 +161,11 @@ impl From<[Vector2; 2]> for Rectangle {
     }
 }
 
-impl Into<[Vector2; 2]> for Rectangle {
-    fn into(self) -> [Vector2; 2] {
+impl From<Rectangle> for [Vector2; 2] {
+    fn from(val: Rectangle) -> Self {
         [
-            Vector2::new(self.x, self.y),
-            Vector2::new(self.width, self.height),
+            Vector2::new(val.x, val.y),
+            Vector2::new(val.width, val.height),
         ]
     }
 }
@@ -181,9 +181,9 @@ impl From<(f32, f32, f32, f32)> for Rectangle {
     }
 }
 
-impl Into<(f32, f32, f32, f32)> for Rectangle {
-    fn into(self) -> (f32, f32, f32, f32) {
-        (self.x, self.y, self.width, self.height)
+impl From<Rectangle> for (f32, f32, f32, f32) {
+    fn from(val: Rectangle) -> Self {
+        (val.x, val.y, val.width, val.height)
     }
 }
 
@@ -198,9 +198,9 @@ impl From<[f32; 4]> for Rectangle {
     }
 }
 
-impl Into<[f32; 4]> for Rectangle {
-    fn into(self) -> [f32; 4] {
-        [self.x, self.y, self.width, self.height]
+impl From<Rectangle> for [f32; 4] {
+    fn from(val: Rectangle) -> Self {
+        [val.x, val.y, val.width, val.height]
     }
 }
 
@@ -215,13 +215,13 @@ impl From<(i32, i32, i32, i32)> for Rectangle {
     }
 }
 
-impl Into<(i32, i32, i32, i32)> for Rectangle {
-    fn into(self) -> (i32, i32, i32, i32) {
+impl From<Rectangle> for (i32, i32, i32, i32) {
+    fn from(val: Rectangle) -> Self {
         (
-            self.x as i32,
-            self.y as i32,
-            self.width as i32,
-            self.height as i32,
+            val.x as i32,
+            val.y as i32,
+            val.width as i32,
+            val.height as i32,
         )
     }
 }
@@ -237,13 +237,13 @@ impl From<[i32; 4]> for Rectangle {
     }
 }
 
-impl Into<[i32; 4]> for Rectangle {
-    fn into(self) -> [i32; 4] {
+impl From<Rectangle> for [i32; 4] {
+    fn from(val: Rectangle) -> Self {
         [
-            self.x as i32,
-            self.y as i32,
-            self.width as i32,
-            self.height as i32,
+            val.x as i32,
+            val.y as i32,
+            val.width as i32,
+            val.height as i32,
         ]
     }
 }
@@ -259,13 +259,13 @@ impl From<(u32, u32, u32, u32)> for Rectangle {
     }
 }
 
-impl Into<(u32, u32, u32, u32)> for Rectangle {
-    fn into(self) -> (u32, u32, u32, u32) {
+impl From<Rectangle> for (u32, u32, u32, u32) {
+    fn from(val: Rectangle) -> Self {
         (
-            self.x as u32,
-            self.y as u32,
-            self.width as u32,
-            self.height as u32,
+            val.x as u32,
+            val.y as u32,
+            val.width as u32,
+            val.height as u32,
         )
     }
 }
@@ -281,13 +281,13 @@ impl From<[u32; 4]> for Rectangle {
     }
 }
 
-impl Into<[u32; 4]> for Rectangle {
-    fn into(self) -> [u32; 4] {
+impl From<Rectangle> for [u32; 4] {
+    fn from(val: Rectangle) -> Self {
         [
-            self.x as u32,
-            self.y as u32,
-            self.width as u32,
-            self.height as u32,
+            val.x as u32,
+            val.y as u32,
+            val.width as u32,
+            val.height as u32,
         ]
     }
 }
@@ -303,9 +303,9 @@ impl From<Vector4> for Rectangle {
     }
 }
 
-impl Into<Vector4> for Rectangle {
-    fn into(self) -> Vector4 {
-        Vector4::new(self.x, self.y, self.width, self.height)
+impl From<Rectangle> for Vector4 {
+    fn from(val: Rectangle) -> Self {
+        Vector4::new(val.x, val.y, val.width, val.height)
     }
 }
 
@@ -477,9 +477,9 @@ impl Neg for Vector2 {
     }
 }
 
-impl Into<[f32; 2]> for Vector2 {
-    fn into(self) -> [f32; 2] {
-        [self.x, self.y]
+impl From<Vector2> for [f32; 2] {
+    fn from(val: Vector2) -> Self {
+        [val.x, val.y]
     }
 }
 
@@ -495,9 +495,9 @@ impl From<(f32, f32)> for Vector2 {
     }
 }
 
-impl Into<(f32, f32)> for Vector2 {
-    fn into(self) -> (f32, f32) {
-        (self.x, self.y)
+impl From<Vector2> for (f32, f32) {
+    fn from(val: Vector2) -> Self {
+        (val.x, val.y)
     }
 }
 
@@ -510,9 +510,9 @@ impl From<(i32, i32)> for Vector2 {
     }
 }
 
-impl Into<(i32, i32)> for Vector2 {
-    fn into(self) -> (i32, i32) {
-        (self.x as i32, self.y as i32)
+impl From<Vector2> for (i32, i32) {
+    fn from(val: Vector2) -> Self {
+        (val.x as i32, val.y as i32)
     }
 }
 
@@ -525,9 +525,9 @@ impl From<[i32; 2]> for Vector2 {
     }
 }
 
-impl Into<[i32; 2]> for Vector2 {
-    fn into(self) -> [i32; 2] {
-        [self.x as i32, self.y as i32]
+impl From<Vector2> for [i32; 2] {
+    fn from(val: Vector2) -> Self {
+        [val.x as i32, val.y as i32]
     }
 }
 
@@ -540,9 +540,9 @@ impl From<(u32, u32)> for Vector2 {
     }
 }
 
-impl Into<(u32, u32)> for Vector2 {
-    fn into(self) -> (u32, u32) {
-        (self.x as u32, self.y as u32)
+impl From<Vector2> for (u32, u32) {
+    fn from(val: Vector2) -> Self {
+        (val.x as u32, val.y as u32)
     }
 }
 
@@ -555,9 +555,9 @@ impl From<[u32; 2]> for Vector2 {
     }
 }
 
-impl Into<[u32; 2]> for Vector2 {
-    fn into(self) -> [u32; 2] {
-        [self.x as u32, self.y as u32]
+impl From<Vector2> for [u32; 2] {
+    fn from(val: Vector2) -> Self {
+        [val.x as u32, val.y as u32]
     }
 }
 
@@ -794,9 +794,9 @@ impl Neg for Vector3 {
     }
 }
 
-impl Into<[f32; 3]> for Vector3 {
-    fn into(self) -> [f32; 3] {
-        [self.x, self.y, self.z]
+impl From<Vector3> for [f32; 3] {
+    fn from(val: Vector3) -> Self {
+        [val.x, val.y, val.z]
     }
 }
 
@@ -812,9 +812,9 @@ impl From<(f32, f32, f32)> for Vector3 {
     }
 }
 
-impl Into<(f32, f32, f32)> for Vector3 {
-    fn into(self) -> (f32, f32, f32) {
-        (self.x, self.y, self.z)
+impl From<Vector3> for (f32, f32, f32) {
+    fn from(val: Vector3) -> Self {
+        (val.x, val.y, val.z)
     }
 }
 
@@ -828,15 +828,15 @@ impl From<(i32, i32, i32)> for Vector3 {
     }
 }
 
-impl Into<(i32, i32, i32)> for Vector3 {
-    fn into(self) -> (i32, i32, i32) {
-        (self.x as i32, self.y as i32, self.z as i32)
+impl From<Vector3> for (i32, i32, i32) {
+    fn from(val: Vector3) -> Self {
+        (val.x as i32, val.y as i32, val.z as i32)
     }
 }
 
-impl Into<[i32; 3]> for Vector3 {
-    fn into(self) -> [i32; 3] {
-        [self.x as i32, self.y as i32, self.z as i32]
+impl From<Vector3> for [i32; 3] {
+    fn from(val: Vector3) -> Self {
+        [val.x as i32, val.y as i32, val.z as i32]
     }
 }
 
@@ -860,15 +860,15 @@ impl From<(u32, u32, u32)> for Vector3 {
     }
 }
 
-impl Into<(u32, u32, u32)> for Vector3 {
-    fn into(self) -> (u32, u32, u32) {
-        (self.x as u32, self.y as u32, self.z as u32)
+impl From<Vector3> for (u32, u32, u32) {
+    fn from(val: Vector3) -> Self {
+        (val.x as u32, val.y as u32, val.z as u32)
     }
 }
 
-impl Into<[u32; 3]> for Vector3 {
-    fn into(self) -> [u32; 3] {
-        [self.x as u32, self.y as u32, self.z as u32]
+impl From<Vector3> for [u32; 3] {
+    fn from(val: Vector3) -> Self {
+        [val.x as u32, val.y as u32, val.z as u32]
     }
 }
 
@@ -1071,9 +1071,9 @@ impl Neg for Vector4 {
     }
 }
 
-impl Into<Vector3> for Vector4 {
-    fn into(self) -> Vector3 {
-        unsafe { quaternion_to_euler(self) }
+impl From<Vector4> for Vector3 {
+    fn from(val: Vector4) -> Self {
+        unsafe { quaternion_to_euler(val) }
     }
 }
 
@@ -1089,17 +1089,17 @@ impl From<[Vector3; 2]> for Vector4 {
     }
 }
 
-impl Into<Matrix> for Vector4 {
-    fn into(self) -> Matrix {
-        unsafe { quaternion_to_matrix(self) }
+impl From<Vector4> for Matrix {
+    fn from(val: Vector4) -> Self {
+        unsafe { quaternion_to_matrix(val) }
     }
 }
 
-impl Into<(Vector3, f32)> for Vector4 {
-    fn into(self) -> (Vector3, f32) {
+impl From<Vector4> for (Vector3, f32) {
+    fn from(val: Vector4) -> Self {
         let mut axis = Vector3::ZERO;
         let mut angle = 0.0;
-        unsafe { quaternion_to_axis_angle(self, addr_of_mut!(axis), addr_of_mut!(angle)) }
+        unsafe { quaternion_to_axis_angle(val, addr_of_mut!(axis), addr_of_mut!(angle)) }
 
         (axis, angle)
     }
@@ -1111,9 +1111,9 @@ impl From<(Vector3, f32)> for Vector4 {
     }
 }
 
-impl Into<[f32; 4]> for Vector4 {
-    fn into(self) -> [f32; 4] {
-        [self.x, self.y, self.z, self.w]
+impl From<Vector4> for [f32; 4] {
+    fn from(val: Vector4) -> Self {
+        [val.x, val.y, val.z, val.w]
     }
 }
 
@@ -1129,9 +1129,9 @@ impl From<(f32, f32, f32, f32)> for Vector4 {
     }
 }
 
-impl Into<(f32, f32, f32, f32)> for Vector4 {
-    fn into(self) -> (f32, f32, f32, f32) {
-        (self.x, self.y, self.z, self.w)
+impl From<Vector4> for (f32, f32, f32, f32) {
+    fn from(val: Vector4) -> Self {
+        (val.x, val.y, val.z, val.w)
     }
 }
 
@@ -1146,15 +1146,15 @@ impl From<(i32, i32, i32, i32)> for Vector4 {
     }
 }
 
-impl Into<(i32, i32, i32, i32)> for Vector4 {
-    fn into(self) -> (i32, i32, i32, i32) {
-        (self.x as i32, self.y as i32, self.z as i32, self.w as i32)
+impl From<Vector4> for (i32, i32, i32, i32) {
+    fn from(val: Vector4) -> Self {
+        (val.x as i32, val.y as i32, val.z as i32, val.w as i32)
     }
 }
 
-impl Into<[i32; 4]> for Vector4 {
-    fn into(self) -> [i32; 4] {
-        [self.x as i32, self.y as i32, self.z as i32, self.w as i32]
+impl From<Vector4> for [i32; 4] {
+    fn from(val: Vector4) -> Self {
+        [val.x as i32, val.y as i32, val.z as i32, val.w as i32]
     }
 }
 
@@ -1169,9 +1169,9 @@ impl From<(u32, u32, u32, u32)> for Vector4 {
     }
 }
 
-impl Into<(u32, u32, u32, u32)> for Vector4 {
-    fn into(self) -> (u32, u32, u32, u32) {
-        (self.x as u32, self.y as u32, self.z as u32, self.w as u32)
+impl From<Vector4> for (u32, u32, u32, u32) {
+    fn from(val: Vector4) -> Self {
+        (val.x as u32, val.y as u32, val.z as u32, val.w as u32)
     }
 }
 
@@ -1186,9 +1186,9 @@ impl From<[u32; 4]> for Vector4 {
     }
 }
 
-impl Into<[u32; 4]> for Vector4 {
-    fn into(self) -> [u32; 4] {
-        [self.x as u32, self.y as u32, self.z as u32, self.w as u32]
+impl From<Vector4> for [u32; 4] {
+    fn from(val: Vector4) -> Self {
+        [val.x as u32, val.y as u32, val.z as u32, val.w as u32]
     }
 }
 
@@ -1350,11 +1350,11 @@ impl From<(Vector3, f32)> for Matrix {
     }
 }
 
-impl Into<[f32; 16]> for Matrix {
-    fn into(self) -> [f32; 16] {
+impl From<Matrix> for [f32; 16] {
+    fn from(val: Matrix) -> Self {
         [
-            self.m0, self.m4, self.m8, self.m12, self.m1, self.m5, self.m9, self.m13, self.m2,
-            self.m6, self.m10, self.m14, self.m3, self.m7, self.m11, self.m15,
+            val.m0, val.m4, val.m8, val.m12, val.m1, val.m5, val.m9, val.m13, val.m2, val.m6,
+            val.m10, val.m14, val.m3, val.m7, val.m11, val.m15,
         ]
     }
 }
@@ -1384,13 +1384,13 @@ impl From<[f32; 16]> for Matrix {
     }
 }
 
-impl Into<[[f32; 4]; 4]> for Matrix {
-    fn into(self) -> [[f32; 4]; 4] {
+impl From<Matrix> for [[f32; 4]; 4] {
+    fn from(val: Matrix) -> Self {
         [
-            [self.m0, self.m4, self.m8, self.m12],
-            [self.m1, self.m5, self.m9, self.m13],
-            [self.m2, self.m6, self.m10, self.m14],
-            [self.m3, self.m7, self.m11, self.m15],
+            [val.m0, val.m4, val.m8, val.m12],
+            [val.m1, val.m5, val.m9, val.m13],
+            [val.m2, val.m6, val.m10, val.m14],
+            [val.m3, val.m7, val.m11, val.m15],
         ]
     }
 }
@@ -1444,40 +1444,40 @@ impl From<[Vector4; 4]> for Matrix {
     }
 }
 
-impl Into<[Vector4; 4]> for Matrix {
-    fn into(self) -> [Vector4; 4] {
+impl From<Matrix> for [Vector4; 4] {
+    fn from(val: Matrix) -> Self {
         [
             Vector4 {
-                x: self.m0,
-                y: self.m4,
-                z: self.m8,
-                w: self.m12,
+                x: val.m0,
+                y: val.m4,
+                z: val.m8,
+                w: val.m12,
             },
             Vector4 {
-                x: self.m1,
-                y: self.m5,
-                z: self.m9,
-                w: self.m13,
+                x: val.m1,
+                y: val.m5,
+                z: val.m9,
+                w: val.m13,
             },
             Vector4 {
-                x: self.m2,
-                y: self.m6,
-                z: self.m10,
-                w: self.m14,
+                x: val.m2,
+                y: val.m6,
+                z: val.m10,
+                w: val.m14,
             },
             Vector4 {
-                x: self.m3,
-                y: self.m7,
-                z: self.m11,
-                w: self.m15,
+                x: val.m3,
+                y: val.m7,
+                z: val.m11,
+                w: val.m15,
             },
         ]
     }
 }
 
-impl Into<(Vector4, Vector4, Vector4, Vector4)> for Matrix {
-    fn into(self) -> (Vector4, Vector4, Vector4, Vector4) {
-        let [v0, v1, v2, v3]: [Vector4; 4] = self.into();
+impl From<Matrix> for (Vector4, Vector4, Vector4, Vector4) {
+    fn from(val: Matrix) -> Self {
+        let [v0, v1, v2, v3]: [Vector4; 4] = val.into();
         (v0, v1, v2, v3)
     }
 }
