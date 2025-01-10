@@ -73,7 +73,7 @@ macro_rules! guarded {
     ( $tn: ident $( ,$name: ident )* ) => {
         pub struct $tn<'a> {
             _guard: ::std::sync::MutexGuard<'a, ()>,
-            $( $name: ::std::sync::Mutex<()> ),*
+            $( pub(crate) $name: ::std::sync::Mutex<()> ),*
         }
 
         impl<'a> $tn<'a> {

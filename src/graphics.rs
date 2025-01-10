@@ -1,4 +1,7 @@
+use crate::drawing2d::{Drawables2D, Texture};
+use crate::shapes::Shape2D;
 use crate::sys::*;
+pub use crate::sys::{Camera2D, Camera3D, CameraMode, CameraProjection, Color};
 use crate::{guarded, newtype, try_lock, Error, Result};
 use std::ffi::{c_void, CString};
 use std::fs::File;
@@ -7,8 +10,6 @@ use std::io::Read;
 use std::path::Path;
 use std::ptr::{addr_of, addr_of_mut};
 use std::sync::MutexGuard;
-
-pub use crate::sys::{Camera2D, Camera3D, CameraMode, CameraProjection, Color};
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum Scaling {
@@ -22,388 +23,8 @@ impl Default for Scaling {
     }
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub enum SplineType {
-    Linear,
-    Basis,
-    CatmullRom,
-    Quadratic,
-    Cubic,
-}
-
-impl SplineType {
-    fn draw(
-        &self,
-        points: impl Iterator<Item = Vector2> + ExactSizeIterator,
-        thickness: f32,
-        color: impl Into<Color>,
-    ) {
-        let color = color.into();
-        let points: Vec<Vector2> = points.collect();
-        let ptr = points.as_ptr();
-
-        match self {
-            SplineType::Linear => unsafe {
-                draw_spline_linear(ptr, points.len() as i32, thickness, color)
-            },
-            SplineType::Basis => unsafe {
-                draw_spline_basis(ptr, points.len() as i32, thickness, color)
-            },
-            SplineType::CatmullRom => unsafe {
-                draw_spline_catmull_rom(ptr, points.len() as i32, thickness, color)
-            },
-            SplineType::Quadratic => unsafe {
-                draw_spline_bezier_quadratic(ptr, points.len() as i32, thickness, color)
-            },
-            SplineType::Cubic => unsafe {
-                draw_spline_bezier_cubic(ptr, points.len() as i32, thickness, color)
-            },
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum Shape3D<'t> {
-    Line(Vector3, Vector3),
-    Circle {
-        center: Vector3,
-        radius: f32,
-        rotation_axis: Vector3,
-        rotation_angle: f32,
-    },
-    Triangle(Vector3, Vector3, Vector3),
-    TriangleStrip(&'t [Vector3]),
-    Cube {
-        position: Vector3,
-        size: Vector3,
-    },
-    Sphere {
-        center: Vector3,
-        radius: f32,
-        rings: u32,
-        slices: u32,
-    },
-    Cylinder {
-        start_pos: Vector3,
-        end_pos: Vector3,
-        start_radius: f32,
-        end_radius: f32,
-        slices: u32,
-    },
-    Capsule {
-        start_pos: Vector3,
-        end_pos: Vector3,
-        radius: f32,
-        slices: u32,
-        rings: u32,
-    },
-    Plane {
-        center: Vector3,
-        size: Vector2,
-    },
-    Grid {
-        slices: u32,
-        spacing: f32,
-    },
-    Ray(Ray),
-}
-
-impl<'t> From<Ray> for Shape3D<'t> {
-    fn from(ray: Ray) -> Self {
-        Self::Ray(ray)
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum Shape2D<'t> {
-    Pixel(Vector2),
-    Line {
-        start: Vector2,
-        end: Vector2,
-        thickness: Option<f32>,
-    },
-    LineStrip(&'t [Vector2]),
-    Bezier {
-        start: Vector2,
-        end: Vector2,
-        thickness: f32,
-    },
-    Circle {
-        center: Vector2,
-        radius: f32,
-    },
-    Pie {
-        center: Vector2,
-        radius: f32,
-        start_angle: f32,
-        end_angle: f32,
-        segments: u32,
-    },
-    Ellipse {
-        center: Vector2,
-        radius: Vector2,
-    },
-    Ring {
-        center: Vector2,
-        inner_radius: f32,
-        outer_radius: f32,
-        angle: Vector2,
-        segments: u32,
-    },
-    Rectangle {
-        rect: Rectangle,
-        rotation: Option<f32>,
-    },
-    RoundedRectangle {
-        rect: Rectangle,
-        roundness: f32,
-        segments: i32,
-    },
-    Triangle {
-        v1: Vector2,
-        v2: Vector2,
-        v3: Vector2,
-    },
-    TriangleFan(&'t [Vector2]),
-    TriangleStrip(&'t [Vector2]),
-    Polygon {
-        center: Vector2,
-        sides: i32,
-        radius: f32,
-        rotation: f32,
-    },
-    Spline {
-        spline_type: SplineType,
-        points: &'t [Vector2],
-        thickness: f32,
-    },
-}
-
-impl<'t> Shape2D<'t> {
-    pub fn collides_with(&self, other: impl Into<Shape2D<'t>>) -> bool {
-        let other = other.into();
-        let pair = (self, &other);
-
-        match pair {
-            (Shape2D::Rectangle { rect: r1, .. }, Shape2D::Rectangle { rect: r2, .. }) => unsafe {
-                check_collision_recs(*r1, *r2)
-            },
-            (
-                Shape2D::Circle {
-                    center: c1,
-                    radius: r1,
-                },
-                Shape2D::Circle {
-                    center: c2,
-                    radius: r2,
-                },
-            ) => unsafe { check_collision_circles(*c1, *r1, *c2, *r2) },
-            (
-                Shape2D::Rectangle { rect: r, .. },
-                Shape2D::Circle {
-                    center: c,
-                    radius: r2,
-                },
-            ) => unsafe { check_collision_circle_rec(*c, *r2, *r) },
-            (
-                Shape2D::Circle {
-                    center: c,
-                    radius: r,
-                },
-                Shape2D::Rectangle { rect: rc, .. },
-            ) => unsafe { check_collision_circle_rec(*c, *r, *rc) },
-
-            (
-                Shape2D::Circle {
-                    center: c,
-                    radius: r,
-                },
-                Shape2D::Line {
-                    start: s, end: e, ..
-                },
-            ) => unsafe { check_collision_circle_line(*c, *r, *s, *e) },
-            (
-                Shape2D::Line {
-                    start: s, end: e, ..
-                },
-                Shape2D::Circle {
-                    center: c,
-                    radius: r,
-                },
-            ) => unsafe { check_collision_circle_line(*c, *r, *s, *e) },
-
-            (Shape2D::Pixel(p), Shape2D::Rectangle { rect: r, .. }) => unsafe {
-                check_collision_point_rec(*p, *r)
-            },
-            (Shape2D::Rectangle { rect: r, .. }, Shape2D::Pixel(p)) => unsafe {
-                check_collision_point_rec(*p, *r)
-            },
-
-            (
-                Shape2D::Pixel(p),
-                Shape2D::Circle {
-                    center: c,
-                    radius: r,
-                },
-            ) => unsafe { check_collision_point_circle(*p, *c, *r) },
-            (
-                Shape2D::Circle {
-                    center: c,
-                    radius: r,
-                },
-                Shape2D::Pixel(p),
-            ) => unsafe { check_collision_point_circle(*p, *c, *r) },
-
-            (Shape2D::Pixel(p), Shape2D::Triangle { v1, v2, v3 }) => unsafe {
-                check_collision_point_triangle(*p, *v1, *v2, *v3)
-            },
-            (Shape2D::Triangle { v1, v2, v3 }, Shape2D::Pixel(p)) => unsafe {
-                check_collision_point_triangle(*p, *v1, *v2, *v3)
-            },
-
-            (
-                Shape2D::Pixel(p),
-                Shape2D::Line {
-                    start: s, end: e, ..
-                },
-            ) => unsafe { check_collision_point_line(*p, *s, *e, 1) },
-            (
-                Shape2D::Line {
-                    start: s, end: e, ..
-                },
-                Shape2D::Pixel(p),
-            ) => unsafe { check_collision_point_line(*p, *s, *e, 1) },
-
-            (
-                Shape2D::Pixel(p),
-                Shape2D::Polygon {
-                    center,
-                    sides,
-                    radius,
-                    ..
-                },
-            )
-            | (
-                Shape2D::Polygon {
-                    center,
-                    sides,
-                    radius,
-                    ..
-                },
-                Shape2D::Pixel(p),
-            ) => {
-                let mut points = Vec::with_capacity(*sides as usize);
-                for i in 0..*sides {
-                    let radius = *radius as f64;
-                    let x = center.x as f64;
-                    let y = center.y as f64;
-                    let angle = 2.0 * PI / *sides as f64 * i as f64;
-                    let x = x + radius * angle.cos();
-                    let y = y + radius * angle.sin();
-                    points.push(Vector2::new(x as f32, y as f32));
-                }
-
-                unsafe { check_collision_point_poly(*p, points.as_ptr(), points.len() as i32) }
-            }
-
-            _ => false,
-        }
-    }
-
-    pub fn collision_point(&self, other: impl Into<Shape2D<'t>>) -> Option<(i32, i32)> {
-        let (x, y): (i32, i32) = self.collision_pointv(other)?.into();
-        Some((x, y))
-    }
-
-    pub fn collision_pointv(&self, other: impl Into<Shape2D<'t>>) -> Option<Vector2> {
-        let other = other.into();
-        let pair = (self, &other);
-
-        match pair {
-            (
-                Shape2D::Line {
-                    start: s1, end: e1, ..
-                },
-                Shape2D::Line {
-                    start: s2, end: e2, ..
-                },
-            ) => {
-                let mut ptr = Vector2::ZERO;
-                let has_collision =
-                    unsafe { check_collision_lines(*s1, *e1, *s2, *e2, addr_of_mut!(ptr)) };
-
-                if has_collision {
-                    Some(ptr)
-                } else {
-                    None
-                }
-            }
-
-            _ => None,
-        }
-    }
-
-    pub fn spline_point(&self, t: f32) -> Option<Vector2> {
-        let t = t.clamp(0.0, 1.0);
-        match self {
-            Shape2D::Spline {
-                spline_type,
-                points,
-                ..
-            } => match spline_type {
-                SplineType::Linear => {
-                    let p1 = points.get(0)?;
-                    let p2 = points.get(1)?;
-                    Some(unsafe { get_spline_point_linear(*p1, *p2, t) })
-                }
-                SplineType::Basis => {
-                    let p1 = points.get(0)?;
-                    let p2 = points.get(1)?;
-                    let p3 = points.get(2)?;
-                    let p4 = points.get(3)?;
-                    Some(unsafe { get_spline_point_basis(*p1, *p2, *p3, *p4, t) })
-                }
-                SplineType::CatmullRom => {
-                    let p1 = points.get(0)?;
-                    let p2 = points.get(1)?;
-                    let p3 = points.get(2)?;
-                    let p4 = points.get(3)?;
-                    Some(unsafe { get_spline_point_catmull_rom(*p1, *p2, *p3, *p4, t) })
-                }
-                SplineType::Quadratic => {
-                    let p1 = points.get(0)?;
-                    let p2 = points.get(1)?;
-                    let p3 = points.get(2)?;
-                    Some(unsafe { get_spline_point_bezier_quad(*p1, *p2, *p3, t) })
-                }
-                SplineType::Cubic => {
-                    let p1 = points.get(0)?;
-                    let p2 = points.get(1)?;
-                    let p3 = points.get(2)?;
-                    let p4 = points.get(3)?;
-                    Some(unsafe { get_spline_point_bezier_cubic(*p1, *p2, *p3, *p4, t) })
-                }
-            },
-            _ => None,
-        }
-    }
-}
-
-impl<'t, T: Into<Rectangle>> From<T> for Shape2D<'t> {
-    fn from(rect: T) -> Self {
-        Self::Rectangle {
-            rect: rect.into(),
-            rotation: None,
-        }
-    }
-}
-
-newtype!(VrStereoConfig, unload_vr_stereo_config);
-newtype!(Shader, unload_shader);
-newtype!(Texture2D, unload_texture);
-newtype!(RenderTexture2D, unload_render_texture);
 newtype!(Font, unload_font);
-newtype!(Model, unload_model);
+newtype!(Shader, unload_shader);
 
 impl Font {
     pub fn from_file(file_name: impl AsRef<Path>) -> Result<Self> {
@@ -443,70 +64,6 @@ impl Font {
 impl Default for Font {
     fn default() -> Self {
         Self(unsafe { get_font_default() })
-    }
-}
-
-impl RenderTexture2D {
-    pub fn new(width: u32, height: u32) -> Result<Self> {
-        let tex = unsafe { load_render_texture(width as i32, height as i32) };
-        let ptr = addr_of!(tex);
-        if !unsafe { is_render_texture_valid(ptr.read()) } {
-            return Err(Error::UnableToLoad("render texture"));
-        }
-        Ok(Self(tex))
-    }
-}
-
-impl Texture2D {
-    pub fn from_file(file_name: impl AsRef<Path>) -> Result<Self> {
-        let file_name = file_name.as_ref().as_os_str().as_encoded_bytes();
-        let file_name = CString::new(file_name)?;
-        let tex = unsafe { load_texture(file_name.as_ptr()) };
-        let ptr = addr_of!(tex);
-        if !unsafe { is_texture_valid(ptr.read()) } {
-            return Err(Error::UnableToLoad("texture"));
-        }
-        Ok(Self(tex))
-    }
-
-    pub fn from_cubemap(img: &Image, layout: CubemapLayout) -> Result<Self> {
-        let tex = unsafe { load_texture_cubemap(img.as_raw(), layout as i32) };
-        let ptr = addr_of!(tex);
-
-        if !unsafe { is_texture_valid(ptr.read()) } {
-            return Err(Error::UnableToLoad("texture"));
-        }
-        Ok(Self(tex))
-    }
-
-    pub fn update(&mut self, pixels: impl AsRef<[u8]>) {
-        let data = pixels.as_ref();
-        unsafe { update_texture(self.as_raw(), data.as_ptr() as *const c_void) }
-    }
-
-    pub fn update_ex(&mut self, rec: impl Into<Rectangle>, pixels: impl AsRef<[u8]>) {
-        let rec = rec.into();
-        let data = pixels.as_ref();
-        unsafe { update_texture_rec(self.as_raw(), rec.into(), data.as_ptr() as *const c_void) }
-    }
-
-    pub fn compute_mipmaps(&mut self) {
-        let ptr = addr_of_mut!(self.0);
-        unsafe { gen_texture_mipmaps(ptr) }
-    }
-
-    pub fn filter_mode(&mut self, filter: TextureFilter) {
-        unsafe { set_texture_filter(self.as_raw(), filter as i32) }
-    }
-
-    pub fn wrapping_mode(&mut self, wrap: TextureWrap) {
-        unsafe { set_texture_wrap(self.as_raw(), wrap as i32) }
-    }
-}
-
-impl From<Image> for Texture2D {
-    fn from(img: Image) -> Self {
-        Self(unsafe { load_texture_from_image(img.as_raw()) })
     }
 }
 
@@ -1179,7 +736,7 @@ impl Drawables2D for Image {
 
     fn draw_texture(
         &mut self,
-        _texture: &Texture2D,
+        _texture: &Texture,
         _position: impl Into<Vector2>,
         _tint: impl Into<Color>,
     ) -> Result<()> {
@@ -1191,7 +748,7 @@ impl Drawables2D for Image {
 
     fn draw_texture_ex(
         &mut self,
-        _texture: &Texture2D,
+        _texture: &Texture,
         _position: impl Into<Vector2>,
         _rotation: f32,
         _scale: f32,
@@ -1205,7 +762,7 @@ impl Drawables2D for Image {
 
     fn draw_texture_clipped(
         &mut self,
-        _texture: &Texture2D,
+        _texture: &Texture,
         _src: impl Into<Rectangle>,
         _pos: impl Into<Vector2>,
         _tint: impl Into<Color>,
@@ -1218,7 +775,7 @@ impl Drawables2D for Image {
 
     fn draw_texture_rotated(
         &mut self,
-        _texture: &Texture2D,
+        _texture: &Texture,
         _src: impl Into<Rectangle>,
         _dst: impl Into<Rectangle>,
         _origin: impl Into<Vector2>,
@@ -1233,7 +790,7 @@ impl Drawables2D for Image {
 
     fn draw_texture_npatched(
         &mut self,
-        _texture: &Texture2D,
+        _texture: &Texture,
         _info: impl Into<NPatchInfo>,
         _dst: impl Into<Rectangle>,
         _origin: impl Into<Vector2>,
@@ -1395,693 +952,18 @@ impl Shader {
         Ok(())
     }
 
-    pub fn set_texture(&mut self, loc: impl AsRef<str>, texture: &Texture2D) -> Result<()> {
+    pub fn set_texture(&mut self, loc: impl AsRef<str>, texture: &Texture) -> Result<()> {
         let loc = self.location(loc)?;
         unsafe { set_shader_value_texture(self.as_raw(), loc, texture.as_raw()) }
         Ok(())
     }
 }
 
-impl Camera3D {
-    pub fn position(&self, pos: Vector3) -> Self {
-        Self {
-            position: pos,
-            ..*self
-        }
-    }
-
-    pub fn positionf(&self, x: f32, y: f32, z: f32) -> Self {
-        self.position(Vector3::new(x, y, z))
-    }
-
-    pub fn target(&self, target: Vector3) -> Self {
-        Self { target, ..*self }
-    }
-
-    pub fn targetf(&self, x: f32, y: f32, z: f32) -> Self {
-        self.target(Vector3::new(x, y, z))
-    }
-
-    pub fn up(&self, up: Vector3) -> Self {
-        Self { up, ..*self }
-    }
-
-    pub fn upf(&self, x: f32, y: f32, z: f32) -> Self {
-        self.up(Vector3::new(x, y, z))
-    }
-
-    pub fn fovy(&self, fovy: f32) -> Self {
-        Self { fovy, ..*self }
-    }
-
-    pub fn projection(&self, projection: CameraProjection) -> Self {
-        Self {
-            projection: projection as i32,
-            ..*self
-        }
-    }
-
-    pub fn perspective(position: Vector3, target: Vector3, up: Vector3, fovy: f32) -> Self {
-        Self {
-            position,
-            target,
-            up,
-            fovy,
-            projection: CameraProjection::Perspective as i32,
-        }
-    }
-
-    pub fn orthographic(position: Vector3, target: Vector3, up: Vector3, fovy: f32) -> Self {
-        Self {
-            position,
-            target,
-            up,
-            fovy,
-            projection: CameraProjection::Orthographic as i32,
-        }
-    }
-
-    pub fn update(&mut self, mode: CameraMode) {
-        unsafe { update_camera(self, mode as i32) }
-    }
-
-    pub fn update_pro(&mut self, movement: Vector3, rotation: Vector3, zoom: f32) {
-        unsafe { update_camera_pro(self, movement, rotation, zoom) }
-    }
-}
-
-impl Default for Camera3D {
-    fn default() -> Self {
-        Self {
-            position: Vector3::ZERO,
-            target: Vector3::ZERO,
-            up: Vector3::UP,
-            fovy: 45.0,
-            projection: CameraProjection::Perspective as i32,
-        }
-    }
-}
-
-impl Camera {
-    pub fn screen_to_world(&self, position: Vector2) -> Ray {
-        unsafe { get_screen_to_world_ray(position, *self) }
-    }
-
-    pub fn screen_to_world_viewport(&self, position: Vector2, width: u32, height: u32) -> Ray {
-        unsafe { get_screen_to_world_ray_ex(position, *self, width as i32, height as i32) }
-    }
-
-    pub fn world_to_screen(&self, position: Vector3) -> Vector2 {
-        unsafe { get_world_to_screen(position, *self) }
-    }
-
-    pub fn world_to_screen_viewport(&self, position: Vector3, width: u32, height: u32) -> Vector2 {
-        unsafe { get_world_to_screen_ex(position, *self, width as i32, height as i32) }
-    }
-
-    pub fn matrix(&self) -> Matrix {
-        unsafe { get_camera_matrix(*self) }
-    }
-}
-
-impl Into<Matrix> for Camera {
-    fn into(self) -> Matrix {
-        unsafe { get_camera_matrix(self) }
-    }
-}
-
-impl Camera2D {
-    pub fn new(offset: Vector2, target: Vector2, rotation: f32, zoom: f32) -> Self {
-        Self {
-            offset,
-            target,
-            rotation,
-            zoom,
-        }
-    }
-
-    pub fn offset(&self, offset: Vector2) -> Self {
-        Self { offset, ..*self }
-    }
-
-    pub fn offsetf(&self, x: f32, y: f32) -> Self {
-        self.offset(Vector2::new(x, y))
-    }
-
-    pub fn target(&self, target: Vector2) -> Self {
-        Self { target, ..*self }
-    }
-
-    pub fn targetf(&self, x: f32, y: f32) -> Self {
-        self.target(Vector2::new(x, y))
-    }
-
-    pub fn rotation(&self, rotation: f32) -> Self {
-        Self { rotation, ..*self }
-    }
-
-    pub fn zoom(&self, zoom: f32) -> Self {
-        Self { zoom, ..*self }
-    }
-
-    pub fn world_to_screen(&self, position: Vector2) -> Vector2 {
-        unsafe { get_world_to_screen_2d(position, *self) }
-    }
-
-    pub fn screen_to_world(&self, position: Vector2) -> Vector2 {
-        unsafe { get_screen_to_world_2d(position, *self) }
-    }
-
-    pub fn matrix(&self) -> Matrix {
-        unsafe { get_camera_matrix_2d(*self) }
-    }
-}
-
-impl Default for Camera2D {
-    fn default() -> Self {
-        Self {
-            offset: Vector2::ZERO,
-            target: Vector2::ZERO,
-            rotation: 0.0,
-            zoom: 1.0,
-        }
-    }
-}
-
-impl Into<Matrix> for Camera2D {
-    fn into(self) -> Matrix {
-        unsafe { get_camera_matrix_2d(self) }
-    }
-}
-
-pub trait Drawables2D {
-    fn draw_shape<'t>(
-        &mut self,
-        shape: impl Into<Shape2D<'t>>,
-        color: impl Into<Color>,
-    ) -> Result<()> {
-        let color = color.into();
-        match shape.into() {
-            Shape2D::Pixel(p) => Ok(unsafe { draw_pixel(p.x as i32, p.y as i32, color) }),
-            Shape2D::Line {
-                start,
-                end,
-                thickness,
-            } => Ok(if let Some(thickness) = thickness {
-                unsafe { draw_line_ex(start, end, thickness, color) }
-            } else {
-                unsafe { draw_line_v(start, end, color) }
-            }),
-            Shape2D::LineStrip(points) => {
-                let ptr = points.as_ptr();
-                Ok(unsafe { draw_line_strip(ptr, points.len() as i32, color) })
-            }
-            Shape2D::Bezier {
-                start,
-                end,
-                thickness,
-            } => Ok(unsafe { draw_line_bezier(start, end, thickness, color) }),
-            Shape2D::Circle { center, radius } => {
-                Ok(unsafe { draw_circle_v(center, radius, color) })
-            }
-            Shape2D::Pie {
-                center,
-                radius,
-                start_angle,
-                end_angle,
-                segments,
-            } => unsafe {
-                Ok(draw_circle_sector(
-                    center,
-                    radius,
-                    start_angle,
-                    end_angle,
-                    segments as i32,
-                    color,
-                ))
-            },
-            Shape2D::Ellipse { center, radius } => Ok(unsafe {
-                draw_ellipse(center.x as i32, center.y as i32, radius.x, radius.y, color)
-            }),
-            Shape2D::Ring {
-                center,
-                inner_radius,
-                outer_radius,
-                angle,
-                segments,
-            } => Ok(unsafe {
-                draw_ring(
-                    center,
-                    inner_radius,
-                    outer_radius,
-                    angle.x,
-                    angle.y,
-                    segments as i32,
-                    color,
-                )
-            }),
-            Shape2D::Rectangle { rect, rotation } => Ok(if let Some(rotation) = rotation {
-                unsafe { draw_rectangle_pro(rect, rect.centerv(), rotation, color) }
-            } else {
-                unsafe { draw_rectangle_rec(rect, color) }
-            }),
-            Shape2D::RoundedRectangle {
-                rect,
-                roundness,
-                segments,
-            } => Ok(unsafe { draw_rectangle_rounded(rect, roundness, segments, color) }),
-            Shape2D::Triangle { v1, v2, v3 } => Ok(unsafe { draw_triangle(v1, v2, v3, color) }),
-            Shape2D::TriangleFan(points) => {
-                let ptr = points.as_ptr();
-                Ok(unsafe { draw_triangle_fan(ptr, points.len() as i32, color) })
-            }
-            Shape2D::TriangleStrip(points) => {
-                let ptr = points.as_ptr();
-                Ok(unsafe { draw_triangle_strip(ptr, points.len() as i32, color) })
-            }
-            Shape2D::Polygon {
-                center,
-                sides,
-                radius,
-                rotation,
-            } => Ok(unsafe { draw_poly(center, sides, radius, rotation, color) }),
-            Shape2D::Spline {
-                spline_type,
-                points,
-                thickness,
-            } => Ok(spline_type.draw(points.iter().copied(), thickness, color)),
-        }
-    }
-
-    fn draw_lines<'t>(
-        &mut self,
-        shape: impl Into<Shape2D<'t>>,
-        line_thickness: Option<f32>,
-        color: impl Into<Color>,
-    ) -> Result<()> {
-        let line_thickness = line_thickness.unwrap_or(1.0);
-        let color = color.into();
-        match shape.into() {
-            Shape2D::Pixel(p) => Ok(unsafe { draw_pixel(p.x as i32, p.y as i32, color) }),
-            Shape2D::Line {
-                start,
-                end,
-                thickness,
-            } => Ok(if let Some(thickness) = thickness {
-                unsafe { draw_line_ex(start, end, thickness, color) }
-            } else {
-                unsafe { draw_line_v(start, end, color) }
-            }),
-            Shape2D::LineStrip(points) => {
-                let ptr = points.as_ptr();
-                Ok(unsafe { draw_line_strip(ptr, points.len() as i32, color) })
-            }
-            Shape2D::Bezier {
-                start,
-                end,
-                thickness,
-            } => Ok(unsafe { draw_line_bezier(start, end, thickness, color) }),
-            Shape2D::Circle { center, radius } => {
-                Ok(unsafe { draw_circle_lines_v(center, radius, color) })
-            }
-            Shape2D::Pie {
-                center,
-                radius,
-                start_angle,
-                end_angle,
-                segments,
-            } => Ok(unsafe {
-                draw_circle_sector_lines(
-                    center,
-                    radius,
-                    start_angle,
-                    end_angle,
-                    segments as i32,
-                    color,
-                )
-            }),
-            Shape2D::Ellipse { center, radius } => Ok(unsafe {
-                draw_ellipse_lines(center.x as i32, center.y as i32, radius.x, radius.y, color)
-            }),
-            Shape2D::Ring {
-                center,
-                inner_radius,
-                outer_radius,
-                angle,
-                segments,
-            } => Ok(unsafe {
-                draw_ring_lines(
-                    center,
-                    inner_radius,
-                    outer_radius,
-                    angle.x,
-                    angle.y,
-                    segments as i32,
-                    color,
-                )
-            }),
-            Shape2D::Rectangle { rect, rotation } => {
-                if let Some(_) = rotation {
-                    Err(Error::OperationNotSupported {
-                        verb: "line drawing",
-                        noun: "rotated rectangles",
-                    })
-                } else {
-                    Ok(unsafe { draw_rectangle_lines_ex(rect, line_thickness, color) })
-                }
-            }
-            Shape2D::RoundedRectangle {
-                rect,
-                roundness,
-                segments,
-            } => Ok(unsafe {
-                draw_rectangle_rounded_lines_ex(rect, roundness, segments, line_thickness, color)
-            }),
-            Shape2D::Triangle { v1, v2, v3 } => {
-                Ok(unsafe { draw_triangle_lines(v1, v2, v3, color) })
-            }
-            Shape2D::TriangleFan(_) => Err(Error::OperationNotSupported {
-                verb: "line drawing",
-                noun: "triangle fans",
-            }),
-            Shape2D::TriangleStrip(_) => Err(Error::OperationNotSupported {
-                verb: "line drawing",
-                noun: "triangle strips",
-            }),
-            Shape2D::Polygon {
-                center,
-                sides,
-                radius,
-                rotation,
-            } => Ok(unsafe {
-                draw_poly_lines_ex(center, sides, radius, rotation, line_thickness, color)
-            }),
-            Shape2D::Spline {
-                spline_type,
-                points,
-                thickness,
-            } => Ok(spline_type.draw(points.iter().copied(), thickness, color)),
-        }
-    }
-
-    fn draw_gradient_h<'t>(
-        &mut self,
-        shape: impl Into<Shape2D<'t>>,
-        start_color: impl Into<Color>,
-        end_color: impl Into<Color>,
-    ) -> Result<()> {
-        let start_color = start_color.into();
-        let end_color = end_color.into();
-
-        match shape.into() {
-            Shape2D::Rectangle { rect, rotation } => {
-                if let Some(_) = rotation {
-                    Err(Error::OperationNotSupported {
-                        verb: "gradient drawing",
-                        noun: "rotated rectangles",
-                    })
-                } else {
-                    Ok(unsafe {
-                        draw_rectangle_gradient_h(
-                            rect.x as i32,
-                            rect.y as i32,
-                            rect.width as i32,
-                            rect.height as i32,
-                            start_color,
-                            end_color,
-                        )
-                    })
-                }
-            }
-            Shape2D::Circle { center, radius } => Ok(unsafe {
-                draw_circle_gradient(
-                    center.x as i32,
-                    center.y as i32,
-                    radius,
-                    start_color,
-                    end_color,
-                )
-            }),
-            _ => Err(Error::OperationNotSupported {
-                verb: "gradient drawing",
-                noun: "non-rectangle/non-circle shapes",
-            }),
-        }
-    }
-
-    fn draw_gradient_v<'t>(
-        &mut self,
-        shape: impl Into<Shape2D<'t>>,
-        start_color: impl Into<Color>,
-        end_color: impl Into<Color>,
-    ) -> Result<()> {
-        let start_color = start_color.into();
-        let end_color = end_color.into();
-
-        match shape.into() {
-            Shape2D::Rectangle { rect, rotation } => {
-                if let Some(_) = rotation {
-                    Err(Error::OperationNotSupported {
-                        verb: "gradient drawing",
-                        noun: "rotated rectangles",
-                    })
-                } else {
-                    Ok(unsafe {
-                        draw_rectangle_gradient_v(
-                            rect.x as i32,
-                            rect.y as i32,
-                            rect.width as i32,
-                            rect.height as i32,
-                            start_color,
-                            end_color,
-                        )
-                    })
-                }
-            }
-            Shape2D::Circle { center, radius } => Ok(unsafe {
-                draw_circle_gradient(
-                    center.x as i32,
-                    center.y as i32,
-                    radius,
-                    start_color,
-                    end_color,
-                )
-            }),
-            _ => Err(Error::OperationNotSupported {
-                verb: "gradient drawing",
-                noun: "non-rectangle/non-circle shapes",
-            }),
-        }
-    }
-
-    fn draw_texture(
-        &mut self,
-        texture: &Texture2D,
-        position: impl Into<Vector2>,
-        tint: impl Into<Color>,
-    ) -> Result<()> {
-        let position = position.into();
-        Ok(unsafe { draw_texture_v(texture.as_raw(), position, tint.into()) })
-    }
-
-    fn draw_texture_ex(
-        &mut self,
-        texture: &Texture2D,
-        position: impl Into<Vector2>,
-        rotation: f32,
-        scale: f32,
-        tint: impl Into<Color>,
-    ) -> Result<()> {
-        let position = position.into();
-        Ok(unsafe {
-            draw_texture_ex(
-                texture.as_raw(),
-                position.into(),
-                rotation,
-                scale,
-                tint.into(),
-            )
-        })
-    }
-
-    fn draw_texture_clipped(
-        &mut self,
-        texture: &Texture2D,
-        src: impl Into<Rectangle>,
-        pos: impl Into<Vector2>,
-        tint: impl Into<Color>,
-    ) -> Result<()> {
-        Ok(unsafe { draw_texture_rec(texture.as_raw(), src.into(), pos.into(), tint.into()) })
-    }
-
-    fn draw_texture_rotated(
-        &mut self,
-        texture: &Texture2D,
-        src: impl Into<Rectangle>,
-        dst: impl Into<Rectangle>,
-        origin: impl Into<Vector2>,
-        rotation: f32,
-        tint: impl Into<Color>,
-    ) -> Result<()> {
-        Ok(unsafe {
-            draw_texture_pro(
-                texture.as_raw(),
-                src.into(),
-                dst.into(),
-                origin.into(),
-                rotation,
-                tint.into(),
-            )
-        })
-    }
-
-    fn draw_texture_npatched(
-        &mut self,
-        texture: &Texture2D,
-        info: impl Into<NPatchInfo>,
-        dst: impl Into<Rectangle>,
-        origin: impl Into<Vector2>,
-        rotation: f32,
-        tint: impl Into<Color>,
-    ) -> Result<()> {
-        Ok(unsafe {
-            draw_texture_n_patch(
-                texture.as_raw(),
-                info.into(),
-                dst.into(),
-                origin.into(),
-                rotation,
-                tint.into(),
-            )
-        })
-    }
-
-    fn draw_text(
-        &mut self,
-        text: impl AsRef<str>,
-        pos: impl Into<Vector2>,
-        font_size: u32,
-        color: impl Into<Color>,
-    ) -> Result<()> {
-        let text = text.as_ref().as_bytes();
-        let text = CString::new(text)?;
-        let pos = pos.into();
-        let (x, y): (i32, i32) = pos.into();
-
-        Ok(unsafe { draw_text(text.as_ptr(), x, y, font_size as i32, color.into()) })
-    }
-
-    fn draw_text_ex(
-        &mut self,
-        font: &Font,
-        text: impl AsRef<str>,
-        pos: impl Into<Vector2>,
-        font_size: f32,
-        spacing: f32,
-        tint: impl Into<Color>,
-    ) -> Result<()> {
-        let text = text.as_ref().as_bytes();
-        let text = CString::new(text)?;
-
-        Ok(unsafe {
-            draw_text_ex(
-                font.as_raw(),
-                text.as_ptr(),
-                pos.into(),
-                font_size,
-                spacing,
-                tint.into(),
-            )
-        })
-    }
-
-    fn draw_text_rotated(
-        &mut self,
-        font: &Font,
-        text: impl AsRef<str>,
-        pos: impl Into<Vector2>,
-        origin: impl Into<Vector2>,
-        rotation: f32,
-        font_size: f32,
-        spacing: f32,
-        tint: impl Into<Color>,
-    ) -> Result<()> {
-        let text = text.as_ref().as_bytes();
-        let text = CString::new(text)?;
-
-        Ok(unsafe {
-            draw_text_pro(
-                font.as_raw(),
-                text.as_ptr(),
-                pos.into(),
-                origin.into(),
-                rotation,
-                font_size,
-                spacing,
-                tint.into(),
-            )
-        })
-    }
-
-    fn clear_background(&mut self, color: impl Into<Color>) {
-        unsafe { clear_background(color.into()) }
-    }
-}
-
-guarded!(Drawing, drawing);
+guarded!(Drawing, drawing, shaded, viewport, blended);
 
 impl<'a> Drawing<'a> {
-    pub fn draw_fps(&mut self, x: i32, y: i32) {
-        unsafe { draw_fps(x, y) }
-    }
-
-    pub fn begin_mode2d(&mut self, camera: &Camera2D) -> Result<Drawing2D> {
-        let guard = try_lock!(self.drawing).ok_or(Error::ThreadAlreadyLocked("drawing"))?;
-        unsafe { begin_mode_2d(*camera) }
-        Ok(Drawing2D(guard))
-    }
-
-    pub fn draw2d<F>(&mut self, camera: &Camera2D, f: F) -> Result<()>
-    where
-        F: FnOnce(&mut Drawing2D),
-    {
-        let mut ctx = self.begin_mode2d(camera)?;
-        f(&mut ctx);
-        Ok(())
-    }
-
-    pub fn begin_mode3d(&mut self, camera: &Camera3D) -> Result<Drawing3D> {
-        let guard = try_lock!(self.drawing).ok_or(Error::ThreadAlreadyLocked("drawing"))?;
-        unsafe { begin_mode_3d(*camera) }
-        Ok(Drawing3D(guard))
-    }
-
-    pub fn draw3d<F>(&mut self, camera: &Camera3D, f: F) -> Result<()>
-    where
-        F: FnOnce(&mut Drawing3D),
-    {
-        let mut ctx = self.begin_mode3d(camera)?;
-        f(&mut ctx);
-        Ok(())
-    }
-
-    pub fn begin_texture_mode(&mut self, texture: &RenderTexture2D) -> Result<DrawingTexture> {
-        let guard = try_lock!(self.drawing).ok_or(Error::ThreadAlreadyLocked("drawing"))?;
-        unsafe { begin_texture_mode(texture.as_raw()) }
-        Ok(DrawingTexture(guard))
-    }
-
-    pub fn draw_to_texture<F>(&mut self, texture: &RenderTexture2D, f: F) -> Result<()>
-    where
-        F: FnOnce(&mut DrawingTexture),
-    {
-        let mut ctx = self.begin_texture_mode(texture)?;
-        f(&mut ctx);
-        Ok(())
-    }
-
     pub fn begin_shader_mode(&mut self, shader: &Shader) -> Result<DrawingShaded> {
-        let guard = try_lock!(self.drawing).ok_or(Error::ThreadAlreadyLocked("drawing"))?;
+        let guard = try_lock!(self.shaded).ok_or(Error::ThreadAlreadyLocked("drawing"))?;
         unsafe { begin_shader_mode(shader.as_raw()) }
         Ok(DrawingShaded(guard))
     }
@@ -2096,7 +978,7 @@ impl<'a> Drawing<'a> {
     }
 
     pub fn begin_blend_mode(&mut self, mode: BlendMode) -> Result<DrawingBlended> {
-        let guard = try_lock!(self.drawing).ok_or(Error::ThreadAlreadyLocked("drawing"))?;
+        let guard = try_lock!(self.blended).ok_or(Error::ThreadAlreadyLocked("drawing"))?;
         unsafe { begin_blend_mode(mode as i32) }
         Ok(DrawingBlended(guard))
     }
@@ -2117,12 +999,16 @@ impl<'a> Drawing<'a> {
         width: i32,
         height: i32,
     ) -> Result<DrawingViewport> {
-        let guard = try_lock!(self.drawing).ok_or(Error::ThreadAlreadyLocked("drawing"))?;
+        let guard = try_lock!(self.viewport).ok_or(Error::ThreadAlreadyLocked("drawing"))?;
         unsafe { begin_scissor_mode(x, y, width, height) }
         Ok(DrawingViewport(guard))
     }
 
-    pub fn begin_viewport_mode_rect(&mut self, viewport: &Rectangle) -> Result<DrawingViewport> {
+    pub fn begin_viewport_mode_rect(
+        &mut self,
+        viewport: impl Into<Rectangle>,
+    ) -> Result<DrawingViewport> {
+        let viewport = viewport.into();
         self.begin_viewport_mode(
             viewport.x as i32,
             viewport.y as i32,
@@ -2131,7 +1017,11 @@ impl<'a> Drawing<'a> {
         )
     }
 
-    pub fn begin_viewport_mode_vec4(&mut self, viewport: &Vector4) -> Result<DrawingViewport> {
+    pub fn begin_viewport_mode_vec4(
+        &mut self,
+        viewport: impl Into<Vector4>,
+    ) -> Result<DrawingViewport> {
+        let viewport = viewport.into();
         self.begin_viewport_mode(
             viewport.x as i32,
             viewport.y as i32,
@@ -2142,9 +1032,11 @@ impl<'a> Drawing<'a> {
 
     pub fn begin_viewport_mode_vec2(
         &mut self,
-        location: &Vector2,
-        size: &Vector2,
+        location: impl Into<Vector2>,
+        size: impl Into<Vector2>,
     ) -> Result<DrawingViewport> {
+        let location = location.into();
+        let size = size.into();
         self.begin_viewport_mode(
             location.x as i32,
             location.y as i32,
@@ -2162,10 +1054,11 @@ impl<'a> Drawing<'a> {
         Ok(())
     }
 
-    pub fn draw_viewport_rect<F>(&mut self, viewport: &Rectangle, f: F) -> Result<()>
+    pub fn draw_viewport_rect<F>(&mut self, viewport: impl Into<Rectangle>, f: F) -> Result<()>
     where
         F: FnOnce(&mut DrawingViewport),
     {
+        let viewport = viewport.into();
         self.draw_viewport(
             viewport.x as i32,
             viewport.y as i32,
@@ -2175,10 +1068,11 @@ impl<'a> Drawing<'a> {
         )
     }
 
-    pub fn draw_viewport_vec4<F>(&mut self, viewport: &Vector4, f: F) -> Result<()>
+    pub fn draw_viewport_vec4<F>(&mut self, viewport: impl Into<Vector4>, f: F) -> Result<()>
     where
         F: FnOnce(&mut DrawingViewport),
     {
+        let viewport = viewport.into();
         self.draw_viewport(
             viewport.x as i32,
             viewport.y as i32,
@@ -2188,10 +1082,17 @@ impl<'a> Drawing<'a> {
         )
     }
 
-    pub fn draw_viewport_vec2<F>(&mut self, location: &Vector2, size: &Vector2, f: F) -> Result<()>
+    pub fn draw_viewport_vec2<F>(
+        &mut self,
+        location: impl Into<Vector2>,
+        size: impl Into<Vector2>,
+        f: F,
+    ) -> Result<()>
     where
         F: FnOnce(&mut DrawingViewport),
     {
+        let location = location.into();
+        let size = size.into();
         self.draw_viewport(
             location.x as i32,
             location.y as i32,
@@ -2199,21 +1100,6 @@ impl<'a> Drawing<'a> {
             size.y as i32,
             f,
         )
-    }
-
-    pub fn begin_vr_stereo_mode(&mut self, config: VrStereoConfig) -> Result<DrawingVr> {
-        let guard = try_lock!(self.drawing).ok_or(Error::ThreadAlreadyLocked("drawing"))?;
-        unsafe { begin_vr_stereo_mode(config.as_raw()) }
-        Ok(DrawingVr(guard))
-    }
-
-    pub fn draw_vr<F>(&mut self, config: VrStereoConfig, f: F) -> Result<()>
-    where
-        F: FnOnce(&mut DrawingVr),
-    {
-        let mut ctx = self.begin_vr_stereo_mode(config)?;
-        f(&mut ctx);
-        Ok(())
     }
 
     pub fn line_spacing(&mut self, spacing: i32) {
@@ -2248,178 +1134,6 @@ impl<'a> Drop for Drawing<'a> {
 impl<'a> Drawables2D for Drawing<'a> {}
 
 #[allow(dead_code)]
-pub struct Drawing2D<'a>(MutexGuard<'a, ()>);
-
-impl Drop for Drawing2D<'_> {
-    fn drop(&mut self) {
-        unsafe { end_mode_2d() }
-    }
-}
-
-impl<'a> Drawables2D for Drawing2D<'a> {}
-
-#[allow(dead_code)]
-pub struct Drawing3D<'a>(MutexGuard<'a, ()>);
-
-impl<'a> Drawing3D<'a> {
-    pub fn draw_shape<'t>(
-        &mut self,
-        shape: impl Into<Shape3D<'t>>,
-        color: impl Into<Color>,
-    ) -> Result<()> {
-        match shape.into() {
-            Shape3D::Line(start, end) => Ok(unsafe { draw_line_3_d(start, end, color.into()) }),
-            Shape3D::Circle {
-                center,
-                radius,
-                rotation_axis,
-                rotation_angle,
-            } => Ok(unsafe {
-                draw_circle_3_d(center, radius, rotation_axis, rotation_angle, color.into())
-            }),
-            Shape3D::Triangle(v1, v2, v3) => {
-                Ok(unsafe { draw_triangle_3_d(v1, v2, v3, color.into()) })
-            }
-            Shape3D::TriangleStrip(points) => {
-                let ptr = points.as_ptr();
-                Ok(unsafe { draw_triangle_strip_3_d(ptr, points.len() as i32, color.into()) })
-            }
-            Shape3D::Cube { position, size } => {
-                Ok(unsafe { draw_cube_v(position, size, color.into()) })
-            }
-            Shape3D::Sphere { center, radius, .. } => {
-                Ok(unsafe { draw_sphere(center, radius, color.into()) })
-            }
-            Shape3D::Cylinder {
-                start_pos,
-                end_pos,
-                start_radius,
-                end_radius,
-                slices,
-            } => Ok(unsafe {
-                draw_cylinder_ex(
-                    start_pos,
-                    end_pos,
-                    start_radius,
-                    end_radius,
-                    slices as i32,
-                    color.into(),
-                )
-            }),
-            Shape3D::Capsule {
-                start_pos,
-                end_pos,
-                radius,
-                slices,
-                rings,
-            } => Ok(unsafe {
-                draw_capsule(
-                    start_pos,
-                    end_pos,
-                    radius,
-                    slices as i32,
-                    rings as i32,
-                    color.into(),
-                )
-            }),
-            Shape3D::Plane { center, size } => {
-                Ok(unsafe { draw_plane(center, size, color.into()) })
-            }
-            Shape3D::Grid { slices, spacing } => Ok(unsafe { draw_grid(slices as i32, spacing) }),
-            Shape3D::Ray(ray) => Ok(unsafe { draw_ray(ray, color.into()) }),
-        }
-    }
-
-    pub fn draw_wires<'t>(
-        &mut self,
-        shape: impl Into<Shape3D<'t>>,
-        color: impl Into<Color>,
-    ) -> Result<()> {
-        match shape.into() {
-            Shape3D::Line(start, end) => Ok(unsafe { draw_line_3_d(start, end, color.into()) }),
-            Shape3D::Cube { position, size } => {
-                Ok(unsafe { draw_cube_wires_v(position, size, color.into()) })
-            }
-            Shape3D::Sphere {
-                center,
-                radius,
-                rings,
-                slices,
-            } => Ok(unsafe {
-                draw_sphere_wires(center, radius, rings as i32, slices as i32, color.into())
-            }),
-            Shape3D::Cylinder {
-                start_pos,
-                end_pos,
-                start_radius,
-                end_radius,
-                slices,
-            } => Ok(unsafe {
-                draw_cylinder_wires_ex(
-                    start_pos,
-                    end_pos,
-                    start_radius,
-                    end_radius,
-                    slices as i32,
-                    color.into(),
-                )
-            }),
-            Shape3D::Capsule {
-                start_pos,
-                end_pos,
-                radius,
-                slices,
-                rings,
-            } => Ok(unsafe {
-                draw_capsule_wires(
-                    start_pos,
-                    end_pos,
-                    radius,
-                    slices as i32,
-                    rings as i32,
-                    color.into(),
-                )
-            }),
-            Shape3D::Grid { slices, spacing } => Ok(unsafe { draw_grid(slices as i32, spacing) }),
-            Shape3D::Ray(ray) => Ok(unsafe { draw_ray(ray, color.into()) }),
-            Shape3D::Circle { .. } => Err(Error::OperationNotSupported {
-                verb: "wireframe drawing",
-                noun: "circles",
-            }),
-            Shape3D::Triangle(_, _, _) => Err(Error::OperationNotSupported {
-                verb: "wireframe drawing",
-                noun: "triangles",
-            }),
-            Shape3D::TriangleStrip(_) => Err(Error::OperationNotSupported {
-                verb: "wireframe drawing",
-                noun: "triangle strips",
-            }),
-            Shape3D::Plane { .. } => Err(Error::OperationNotSupported {
-                verb: "wireframe drawing",
-                noun: "planes",
-            }),
-        }
-    }
-}
-
-impl Drop for Drawing3D<'_> {
-    fn drop(&mut self) {
-        unsafe { end_mode_3d() }
-    }
-}
-
-#[allow(dead_code)]
-pub struct DrawingTexture<'a>(MutexGuard<'a, ()>);
-
-impl<'a> Drawables2D for DrawingTexture<'a> {}
-
-impl Drop for DrawingTexture<'_> {
-    fn drop(&mut self) {
-        unsafe { end_texture_mode() }
-    }
-}
-
-#[allow(dead_code)]
 pub struct DrawingShaded<'a>(MutexGuard<'a, ()>);
 
 impl Drop for DrawingShaded<'_> {
@@ -2443,15 +1157,6 @@ pub struct DrawingViewport<'a>(MutexGuard<'a, ()>);
 impl Drop for DrawingViewport<'_> {
     fn drop(&mut self) {
         unsafe { end_scissor_mode() }
-    }
-}
-
-#[allow(dead_code)]
-pub struct DrawingVr<'a>(MutexGuard<'a, ()>);
-
-impl Drop for DrawingVr<'_> {
-    fn drop(&mut self) {
-        unsafe { end_vr_stereo_mode() }
     }
 }
 
