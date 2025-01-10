@@ -128,15 +128,15 @@ impl Context {
     }
 
     /// Gets the time in milliseconds for the last frame drawn.
-    pub fn delta_time() -> f32 {
+    pub fn delta_time(&self) -> f32 {
         unsafe { get_frame_time() * 1000.0 }
     }
 
-    pub fn elapsed_time() -> f64 {
+    pub fn elapsed_time(&self) -> f64 {
         unsafe { get_time() }
     }
 
-    pub fn fps() -> u32 {
+    pub fn fps(&self) -> u32 {
         unsafe { get_fps() as u32 }
     }
 

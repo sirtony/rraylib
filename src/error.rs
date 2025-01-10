@@ -35,6 +35,10 @@ pub enum Error {
     #[error("Insufficient data for {0}")]
     InsufficientData(String),
 
+    #[cfg(feature = "physac")]
+    #[error("The number of physics bodies exceeds the maximum allowed")]
+    TooManyPhysicsBodies,
+
     #[error("{0}")]
     Generic(String),
 }

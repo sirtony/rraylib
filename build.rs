@@ -219,6 +219,27 @@ fn main() -> anyhow::Result<()> {
     const WRAPPER_C: &str = "wrapper.c";
 
     let mut file = File::create(dir.join(WRAPPER_H))?;
+    writeln!(file, "#pragma once")?;
+
+    for package in &packages {
+        for header in &package.headers {
+            let header = package.out_dir().join("src").join(header);
+            writeln!(file, "#include <{}>", header.display())?;
+        }
+    }
+
+    file.flush()?;
+    std::mem::forget(file);
+
+    let mut file = File::create(dir.join(WRAPPER_C))?;
+
+    if USE_GUI {
+        writeln!(file, "#define RAYGUI_IMPLEMENTATION")?;
+    }
+
+if USE_PHYSAC {
+        writeln!(file, "#define PHYSAC_IMPLEMENTATION")?;
+    }
 
     for package in &packages {
         for header in &package.headers {
@@ -277,6 +298,8 @@ fn main() -> anyhow::Result<()> {
         .blocklist_var(".*?_H$")
         .blocklist_var("^__.*")
         .blocklist_item("^(.*?_)?PI$")
+        .blocklist_item("DEG2RAD")
+        .blocklist_item("RAD2DEG")
         .no_copy(no_copy)
         .disable_header_comment()
         .layout_tests(false)
@@ -313,7 +336,6 @@ fn main() -> anyhow::Result<()> {
     let mut config = cmake::Config::new(raylib.out_dir());
     config
         .define("BUILD_EXAMPLES", "OFF")
-        .define("INCLUDE_EVERYTHING", "ON")
         .define("OPENGL_VERSION", "OFF")
         .define(
             "CMAKE_BUILD_TYPE",
