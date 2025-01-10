@@ -1,9 +1,8 @@
 use crate::sys::*;
-use crate::Result;
+use crate::{guarded, Result};
 use paste::paste;
 use std::ffi::{CStr, CString};
 use std::path::Path;
-use std::sync::MutexGuard;
 
 macro_rules! window_flag {
     ( $name:ident => $value:expr ) => {
@@ -27,15 +26,10 @@ macro_rules! window_flag {
     };
 }
 
-#[allow(dead_code)]
-pub struct Window<'a>(MutexGuard<'a, ()>);
+guarded!(Window);
 
 impl<'a> Window<'a> {
-    pub(crate) fn new(guard: MutexGuard<'a, ()>) -> Self {
-        Self(guard)
-    }
-
-    pub fn should_close(&self) -> bool {
+    pub fn close_requested(&self) -> bool {
         unsafe { window_should_close() }
     }
 

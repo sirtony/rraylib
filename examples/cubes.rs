@@ -43,7 +43,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         size: Vector3::new(2.0, 2.0, 2.0),
     };
 
-    while !window.should_close() {
+    while !window.close_requested() {
         camera.update(CameraMode::Orbital);
 
         let mut ctx = rl.begin_drawing()?;

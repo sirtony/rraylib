@@ -13,7 +13,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let font = Font::default();
 
-    while !window.should_close() {
+    while !window.close_requested() {
         let mut ctx = rl.begin_drawing()?;
 
         ctx.clear_background(Color::RAY_WHITE);

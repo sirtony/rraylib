@@ -37,6 +37,10 @@ pub mod drawing3d;
 /// 2D drawing and rendering.
 pub mod drawing2d;
 
+/// Audio device and sound management.
+pub mod audio;
+
+use crate::audio::AudioDevice;
 use crate::display::Window;
 use crate::graphics::Drawing;
 use crate::sys::*;
@@ -94,7 +98,7 @@ impl Default for Options {
     }
 }
 
-crate::utils::guarded!(base Context, window, drawing);
+crate::utils::guarded!(base Context, window, drawing, audio);
 
 impl Context {
     pub fn window(&self) -> Result<Window> {
@@ -104,6 +108,11 @@ impl Context {
 
         let guard = try_lock!(self.window).ok_or(Error::ThreadAlreadyLocked("window"))?;
         Ok(Window::new(guard))
+    }
+
+    pub fn audio(&self) -> Result<AudioDevice<'_>> {
+        let guard = try_lock!(self.audio).ok_or(Error::ThreadAlreadyLocked("audio"))?;
+        Ok(AudioDevice::get(guard))
     }
 
     pub fn begin_drawing(&self) -> Result<Drawing> {
