@@ -28,4 +28,5 @@ vendor/raylib-*
 
 # these get auto-generated on build
 src/sys.rs
-vendor/wrapper.h
+vendor/wrapper.*
+
