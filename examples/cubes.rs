@@ -1,7 +1,7 @@
-use rraylib::math::{Vector2, Vector3};
 use rraylib::graphics::{
     Camera3D, CameraMode, CameraProjection, Color, Drawables2D, Drawables3D, Shape3D,
 };
+use rraylib::math::{Vector2, Vector3};
 use rraylib::Options;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {

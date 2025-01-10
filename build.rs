@@ -36,6 +36,7 @@ impl RustyRenamer {
         "BLEND_",
         "CAMERA_",
         "NPATCH_",
+        "PHYSICS_",
     ];
     const SUFFIXES: &'static [&'static str] = &["_HINT", "_WINDOWED_MODE", "_MODE"];
     const RENAMES: &'static [(&'static str, &'static str)] = &[
@@ -108,8 +109,17 @@ impl ParseCallbacks for RustyRenamer {
     }
 
     fn item_name(&self, _original_item_name: &str) -> Option<String> {
+        if _original_item_name.contains("PI") {
+            return None;
+        }
+
         if _original_item_name.starts_with("rl") {
             return Some(_original_item_name.to_case(Case::Pascal).to_string());
+        }
+
+        if _original_item_name.starts_with("PHYSAC_") {
+            let underscore_idx = _original_item_name.find('_')?;
+            return Some(_original_item_name[underscore_idx + 1..].to_string());
         }
 
         for (original, renamed) in Self::RENAMES {
@@ -238,6 +248,9 @@ fn main() -> anyhow::Result<()> {
         "AutomationEventList",
         "RlVertexBuffer",
         "RlRenderBatch",
+        "PhysicsBodyData",
+        "PhysicsManifoldData",
+        "PhysicsShape",
     ];
 
     let no_copy = format!("^({})$", no_copy.join("|"));
@@ -263,7 +276,7 @@ fn main() -> anyhow::Result<()> {
         .blocklist_var("^__glibc.*")
         .blocklist_var(".*?_H$")
         .blocklist_var("^__.*")
-        .blocklist_var("_?PI_?")
+        .blocklist_item("^(.*?_)?PI$")
         .no_copy(no_copy)
         .disable_header_comment()
         .layout_tests(false)
@@ -294,6 +307,7 @@ fn main() -> anyhow::Result<()> {
     cc::Build::new()
         .include(&dir)
         .file(&wrapper)
+        .warnings(false)
         .compile("rraylib");
 
     let mut config = cmake::Config::new(raylib.out_dir());

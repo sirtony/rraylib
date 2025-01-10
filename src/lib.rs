@@ -31,6 +31,10 @@ pub mod log;
 /// Audio device and sound management.
 pub mod audio;
 
+/// 2D physics engine.
+#[cfg(feature = "physac")]
+pub mod physac;
+
 use crate::audio::AudioDevice;
 use crate::display::Window;
 use crate::graphics::Drawing;
@@ -89,7 +93,7 @@ impl Default for Options {
     }
 }
 
-crate::utils::guarded!(base Context, window, drawing, audio);
+guarded!(base Context, window, drawing, audio, physics);
 
 impl Context {
     pub fn window(&self) -> Result<Window> {
@@ -104,6 +108,12 @@ impl Context {
     pub fn audio(&self) -> Result<AudioDevice<'_>> {
         let guard = try_lock!(self.audio).ok_or(Error::ThreadAlreadyLocked("audio"))?;
         Ok(AudioDevice::get(guard))
+    }
+
+    #[cfg(feature = "physac")]
+    pub fn physics(&self) -> Result<physac::Physics<'_>> {
+        let guard = try_lock!(self.physics).ok_or(Error::ThreadAlreadyLocked("physics"))?;
+        Ok(physac::Physics::get(guard))
     }
 
     pub fn begin_drawing(&self) -> Result<Drawing> {
