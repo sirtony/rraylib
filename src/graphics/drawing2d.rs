@@ -1,8 +1,8 @@
 #![allow(clippy::too_many_arguments)]
 
 use crate::error::Error;
+use crate::graphics::shapes::Shape2D;
 use crate::graphics::Drawing;
-use crate::shapes::Shape2D;
 use crate::sys::*;
 use crate::{newtype, try_lock};
 use std::ffi::{c_void, CString};

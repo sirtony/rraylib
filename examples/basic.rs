@@ -1,5 +1,5 @@
-use rraylib::graphics::{Color, Drawables2D, Font};
 use rraylib::math::Vector2;
+use rraylib::graphics::{Color, Drawables2D, Font};
 use rraylib::Options;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {

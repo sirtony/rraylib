@@ -1,10 +1,10 @@
 #![allow(clippy::too_many_arguments)]
 
-use crate::drawing2d::Texture;
 use crate::error::{Error, Result};
+use crate::graphics::drawing2d::Texture;
+use crate::graphics::shapes::Shape3D;
 use crate::graphics::Drawing;
 use crate::graphics::Image;
-use crate::shapes::Shape3D;
 use crate::sys::*;
 use crate::{newtype, try_lock};
 use std::ffi::CString;

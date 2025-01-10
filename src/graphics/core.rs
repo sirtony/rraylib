@@ -1,9 +1,5 @@
-use crate::drawing2d::Texture;
-pub use crate::drawing2d::*;
-pub use crate::drawing3d::*;
-pub use crate::shapes::*;
+use crate::graphics::{Drawables2D, Shape2D, Texture};
 use crate::sys::*;
-pub use crate::sys::{Camera2D, Camera3D, CameraMode, CameraProjection, Color};
 use crate::{guarded, newtype, try_lock, Error, Result};
 use std::ffi::{c_void, CString};
 use std::fs::File;
@@ -70,10 +66,6 @@ impl<const N: usize> Kernel<N> {
         self.0.iter()
     }
 
-    pub fn into_iter(self) -> std::array::IntoIter<f32, N> {
-        self.0.into_iter()
-    }
-
     pub fn try_copy_from<I>(&mut self, iter: I) -> Result<()>
     where
         I: IntoIterator<Item = f32> + ExactSizeIterator,
@@ -109,6 +101,14 @@ impl<const N: usize> Kernel<N> {
 impl<const N: usize> Default for Kernel<N> {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl<const N: usize> IntoIterator for Kernel<N> {
+    type Item = f32;
+    type IntoIter = std::array::IntoIter<Self::Item, N>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
     }
 }
 
@@ -604,12 +604,12 @@ impl Image {
     }
 
     /**
-        Returns the raw pointer to the underlying raylib type.
-        # Safety
-        This method is unsafe because it allows the caller to access the underlying pointer directly.
+    Returns the raw pointer to the underlying raylib type.
+    # Safety
+    This method is unsafe because it allows the caller to access the underlying pointer directly.
 
-        The caller must not free the pointer manually, allow the wrapper type to be dropped (resulting in a dangling pointer),
-        or use the pointer to perform interior mutability unless first ensuring that the pointer is not currently in use elsewhere.
+    The caller must not free the pointer manually, allow the wrapper type to be dropped (resulting in a dangling pointer),
+    or use the pointer to perform interior mutability unless first ensuring that the pointer is not currently in use elsewhere.
     */
     pub unsafe fn as_raw(&self) -> crate::sys::Image {
         let ptr = addr_of!(self.img);

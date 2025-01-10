@@ -263,7 +263,7 @@ fn main() -> anyhow::Result<()> {
         .blocklist_var("^__glibc.*")
         .blocklist_var(".*?_H$")
         .blocklist_var("^__.*")
-        .blocklist_var("PI")
+        .blocklist_var("_?PI_?")
         .no_copy(no_copy)
         .disable_header_comment()
         .layout_tests(false)

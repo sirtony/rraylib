@@ -28,15 +28,6 @@ pub mod error;
 /// Provides a wrapper for raylib's logging functionality.
 pub mod log;
 
-/// 2D and 3D shapes and collision detection.
-pub mod shapes;
-
-/// 3D drawing and rendering.
-pub mod drawing3d;
-
-/// 2D drawing and rendering.
-pub mod drawing2d;
-
 /// Audio device and sound management.
 pub mod audio;
 
