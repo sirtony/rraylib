@@ -1,12 +1,20 @@
-use crate::error::Error;
+use crate::drawing2d::Texture;
+use crate::error::{Error, Result};
 use crate::graphics::Drawing;
+use crate::graphics::Image;
 use crate::shapes::Shape3D;
 use crate::sys::*;
 use crate::{newtype, try_lock};
+use std::ffi::CString;
+use std::path::Path;
+use std::ptr::{addr_of, addr_of_mut};
 use std::sync::MutexGuard;
 
 newtype!(VrStereoConfig, unload_vr_stereo_config);
 newtype!(Model, unload_model);
+newtype!(Mesh, unload_mesh);
+newtype!(Material, unload_material);
+newtype!(ModelAnimation, unload_model_animation);
 
 pub trait Drawables3D {
     fn draw_shape<'t>(
@@ -145,6 +153,190 @@ pub trait Drawables3D {
                 verb: "wireframe drawing",
                 noun: "planes",
             }),
+        }
+    }
+
+    fn draw_model(&mut self, model: &Model, position: Vector3, scale: f32, tint: impl Into<Color>) {
+        unsafe { draw_model(model.as_raw(), position, scale, tint.into()) }
+    }
+
+    fn draw_model_ex(
+        &mut self,
+        model: &Model,
+        position: Vector3,
+        rotation_axis: Vector3,
+        rotation_angle: f32,
+        scale: Vector3,
+        tint: impl Into<Color>,
+    ) {
+        unsafe {
+            draw_model_ex(
+                model.as_raw(),
+                position,
+                rotation_axis,
+                rotation_angle,
+                scale,
+                tint.into(),
+            )
+        }
+    }
+
+    fn draw_model_wires(
+        &mut self,
+        model: &Model,
+        position: Vector3,
+        scale: f32,
+        tint: impl Into<Color>,
+    ) {
+        unsafe { draw_model_wires(model.as_raw(), position, scale, tint.into()) }
+    }
+
+    fn draw_model_wires_ex(
+        &mut self,
+        model: &Model,
+        position: Vector3,
+        rotation_axis: Vector3,
+        rotation_angle: f32,
+        scale: Vector3,
+        tint: impl Into<Color>,
+    ) {
+        unsafe {
+            draw_model_wires_ex(
+                model.as_raw(),
+                position,
+                rotation_axis,
+                rotation_angle,
+                scale,
+                tint.into(),
+            )
+        }
+    }
+
+    fn draw_model_points(
+        &mut self,
+        model: &Model,
+        position: Vector3,
+        scale: f32,
+        tint: impl Into<Color>,
+    ) {
+        unsafe { draw_model_points(model.as_raw(), position, scale, tint.into()) }
+    }
+
+    fn draw_model_points_ex(
+        &mut self,
+        model: &Model,
+        position: Vector3,
+        rotation_axis: Vector3,
+        rotation_angle: f32,
+        scale: Vector3,
+        tint: impl Into<Color>,
+    ) {
+        unsafe {
+            draw_model_points_ex(
+                model.as_raw(),
+                position,
+                rotation_axis,
+                rotation_angle,
+                scale,
+                tint.into(),
+            )
+        }
+    }
+
+    fn draw_bounding_box(&mut self, box_: BoundingBox, color: impl Into<Color>) {
+        unsafe { draw_bounding_box(box_, color.into()) }
+    }
+
+    fn draw_billboard(
+        &mut self,
+        camera: &Camera3D,
+        texture: &Texture,
+        position: impl Into<Vector3>,
+        scale: f32,
+        tint: impl Into<Color>,
+    ) {
+        unsafe {
+            draw_billboard(
+                *camera,
+                texture.as_raw(),
+                position.into(),
+                scale.into(),
+                tint.into(),
+            )
+        }
+    }
+
+    fn draw_billboard_clipped(
+        &mut self,
+        camera: &Camera3D,
+        texture: &Texture,
+        source: impl Into<Rectangle>,
+        position: impl Into<Vector3>,
+        size: impl Into<Vector2>,
+        tint: impl Into<Color>,
+    ) {
+        unsafe {
+            draw_billboard_rec(
+                *camera,
+                texture.as_raw(),
+                source.into(),
+                position.into(),
+                size.into(),
+                tint.into(),
+            )
+        }
+    }
+
+    fn draw_billboard_pro(
+        &mut self,
+        camera: &Camera3D,
+        texture: &Texture,
+        src: impl Into<Rectangle>,
+        position: Vector3,
+        up: impl Into<Vector3>,
+        size: impl Into<Vector2>,
+        origin: impl Into<Vector2>,
+        rotation: f32,
+        tint: impl Into<Color>,
+    ) {
+        unsafe {
+            draw_billboard_pro(
+                *camera,
+                texture.as_raw(),
+                src.into(),
+                position,
+                up.into(),
+                size.into(),
+                origin.into(),
+                rotation,
+                tint.into(),
+            )
+        }
+    }
+
+    fn draw_mesh(&mut self, mesh: &Mesh, material: &Material, transform: impl Into<Matrix>) {
+        unsafe { draw_mesh(mesh.as_raw(), material.as_raw(), transform.into()) }
+    }
+
+    fn draw_mesh_instanced<M: Into<Matrix> + Copy>(
+        &mut self,
+        mesh: &Mesh,
+        material: &Material,
+        transforms: impl AsRef<[M]> + ExactSizeIterator,
+    ) {
+        let matrices = transforms
+            .as_ref()
+            .iter()
+            .map(|m| (*m).into())
+            .collect::<Vec<_>>();
+        let ptr = matrices.as_ptr();
+        unsafe {
+            draw_mesh_instanced(
+                mesh.as_raw(),
+                material.as_raw(),
+                ptr,
+                transforms.len() as i32,
+            )
         }
     }
 }
@@ -311,5 +503,200 @@ impl Camera {
 impl Into<Matrix> for Camera {
     fn into(self) -> Matrix {
         unsafe { get_camera_matrix(self) }
+    }
+}
+
+impl Model {
+    pub fn from_file(file_name: impl AsRef<Path>) -> Result<Self> {
+        let file_name = file_name.as_ref().as_os_str().as_encoded_bytes();
+        let file_name = CString::new(file_name)?;
+        let model = unsafe { load_model(file_name.as_ptr()) };
+        let ptr = addr_of!(model);
+
+        if !unsafe { is_model_valid(ptr.read()) } {
+            return Err(Error::UnableToLoad("model"));
+        }
+
+        Ok(Self(model))
+    }
+
+    pub fn bounding_box(&self) -> BoundingBox {
+        unsafe { get_model_bounding_box(self.as_raw()) }
+    }
+
+    pub fn set_mesh_material(&mut self, mesh_id: u32, material_id: u32) {
+        let ptr = addr_of_mut!(self.0);
+        unsafe { set_model_mesh_material(ptr, mesh_id as i32, material_id as i32) }
+    }
+}
+
+impl From<Mesh> for Model {
+    fn from(mesh: Mesh) -> Self {
+        Self(unsafe { load_model_from_mesh(mesh.as_raw()) })
+    }
+}
+
+impl Mesh {
+    pub fn from_polygon(sides: u32, radius: f32) -> Self {
+        Self(unsafe { gen_mesh_poly(sides as i32, radius) })
+    }
+
+    pub fn from_plane(width: f32, height: f32, res_x: i32, res_y: i32) -> Self {
+        Self(unsafe { gen_mesh_plane(width, height, res_x, res_y) })
+    }
+
+    pub fn from_planev(size: impl Into<Vector2>, res: impl Into<Vector2>) -> Self {
+        let size = size.into();
+        let res = res.into();
+        let (res_x, res_y): (i32, i32) = res.into();
+        Self(unsafe { gen_mesh_plane(size.x, size.y, res_x, res_y) })
+    }
+
+    pub fn from_cube(width: f32, height: f32, length: f32) -> Self {
+        Self(unsafe { gen_mesh_cube(width, height, length) })
+    }
+
+    pub fn from_cubev(size: impl Into<Vector3>) -> Self {
+        let size = size.into();
+        Self(unsafe { gen_mesh_cube(size.x, size.y, size.z) })
+    }
+
+    pub fn from_sphere(radius: f32, rings: i32, slices: i32) -> Self {
+        Self(unsafe { gen_mesh_sphere(radius, rings, slices) })
+    }
+
+    pub fn from_hemisphere(radius: f32, rings: i32, slices: i32) -> Self {
+        Self(unsafe { gen_mesh_hemi_sphere(radius, rings, slices) })
+    }
+
+    pub fn from_cylinder(radius: f32, height: f32, slices: i32) -> Self {
+        Self(unsafe { gen_mesh_cylinder(radius, height, slices) })
+    }
+
+    pub fn from_cone(radius: f32, height: f32, slices: i32) -> Self {
+        Self(unsafe { gen_mesh_cone(radius, height, slices) })
+    }
+
+    pub fn from_torus(radius: f32, size: f32, rad_seg: i32, sides: i32) -> Self {
+        Self(unsafe { gen_mesh_torus(radius, size, rad_seg, sides) })
+    }
+
+    pub fn from_knot(radius: f32, size: f32, rad_seg: i32, sides: i32) -> Self {
+        Self(unsafe { gen_mesh_knot(radius, size, rad_seg, sides) })
+    }
+
+    pub fn from_heightmap(heightmap: &Image, size: impl Into<Vector3>) -> Self {
+        let size = size.into();
+        Self(unsafe { gen_mesh_heightmap(heightmap.as_raw(), size) })
+    }
+
+    pub fn from_cubic_map(cubic_map: &Image, size: impl Into<Vector3>) -> Self {
+        let size = size.into();
+        Self(unsafe { gen_mesh_cubicmap(cubic_map.as_raw(), size) })
+    }
+
+    pub fn upload(&mut self, dynamic: bool) -> Result<()> {
+        let ptr = addr_of_mut!(self.0);
+        unsafe { upload_mesh(ptr, dynamic) }
+        Ok(())
+    }
+
+    pub fn bounding_box(&self) -> BoundingBox {
+        unsafe { get_mesh_bounding_box(self.as_raw()) }
+    }
+
+    pub fn compute_tangents(&mut self) {
+        let ptr = addr_of_mut!(self.0);
+        unsafe { gen_mesh_tangents(ptr) }
+    }
+
+    pub fn save(&self, file_name: impl AsRef<Path>) -> Result<()> {
+        let file_name = file_name.as_ref().as_os_str().as_encoded_bytes();
+        let file_name = CString::new(file_name)?;
+        unsafe {
+            export_mesh(self.as_raw(), file_name.as_ptr());
+        }
+        Ok(())
+    }
+}
+
+impl Material {
+    pub fn load_materials(file_name: impl AsRef<Path>) -> Result<Vec<Self>> {
+        let file_name = file_name.as_ref().as_os_str().as_encoded_bytes();
+        let file_name = CString::new(file_name)?;
+        let mut count: i32 = 0;
+        let materials = unsafe { load_materials(file_name.as_ptr(), addr_of_mut!(count)) };
+        let mut vec = Vec::with_capacity(count as usize);
+
+        for i in 0..count {
+            let ptr = unsafe { materials.add(i as usize) };
+            if !unsafe { is_material_valid(ptr.read()) } {
+                return Err(Error::UnableToLoad("material"));
+            }
+            vec.push(Self(unsafe { ptr.read() }));
+        }
+
+        Ok(vec)
+    }
+
+    pub fn set_texture(&mut self, map_type: MaterialMapIndex, texture: &Texture) {
+        let ptr = addr_of_mut!(self.0);
+        unsafe { set_material_texture(ptr, map_type as i32, texture.as_raw()) }
+    }
+}
+
+impl Default for Material {
+    fn default() -> Self {
+        Self(unsafe { load_material_default() })
+    }
+}
+
+impl ModelAnimation {
+    pub fn load_animations(file_name: impl AsRef<Path>, model: &Model) -> Result<Vec<Self>> {
+        let file_name = file_name.as_ref().as_os_str().as_encoded_bytes();
+        let file_name = CString::new(file_name)?;
+        let mut count: i32 = 0;
+        let animations = unsafe { load_model_animations(file_name.as_ptr(), addr_of_mut!(count)) };
+        let mut vec = Vec::with_capacity(count as usize);
+
+        for i in 0..count {
+            let ptr = unsafe { animations.add(i as usize) };
+            if !unsafe { is_model_animation_valid(model.as_raw(), ptr.read()) } {
+                return Err(Error::UnableToLoad("model animation"));
+            }
+            vec.push(Self(unsafe { ptr.read() }));
+        }
+
+        Ok(vec)
+    }
+
+    pub fn update(&mut self, model: &Model, frame: i32) {
+        unsafe { update_model_animation(model.as_raw(), self.as_raw(), frame) }
+    }
+
+    pub fn update_bones(&mut self, model: &Model, frame: i32) {
+        unsafe { update_model_animation_bones(model.as_raw(), self.as_raw(), frame) }
+    }
+}
+
+impl Ray {
+    pub fn raycast_sphere(&self, center: Vector3, radius: f32) -> RayCollision {
+        unsafe { get_ray_collision_sphere(*self, center, radius) }
+    }
+
+    pub fn raycast_box(&self, bounding_box: impl Into<BoundingBox>) -> RayCollision {
+        unsafe { get_ray_collision_box(*self, bounding_box.into()) }
+    }
+
+    pub fn raycast_mesh(&self, mesh: &Mesh, transform: impl Into<Matrix>) -> RayCollision {
+        unsafe { get_ray_collision_mesh(*self, mesh.as_raw(), transform.into()) }
+    }
+
+    pub fn raycast_triangle(&self, p1: Vector3, p2: Vector3, p3: Vector3) -> RayCollision {
+        unsafe { get_ray_collision_triangle(*self, p1, p2, p3) }
+    }
+
+    pub fn raycast_quad(&self, p1: Vector3, p2: Vector3, p3: Vector3, p4: Vector3) -> RayCollision {
+        unsafe { get_ray_collision_quad(*self, p1, p2, p3, p4) }
     }
 }

@@ -89,6 +89,37 @@ pub enum Shape3D<'t> {
     Ray(Ray),
 }
 
+impl<'t> Shape3D<'t> {
+    pub fn collides_with<'t2>(&self, other: impl Into<Shape3D<'t2>>) -> bool {
+        let pair = (*self, other.into());
+        match pair {
+            (
+                Shape3D::Sphere {
+                    center: c1,
+                    radius: r1,
+                    ..
+                },
+                Shape3D::Sphere {
+                    center: c2,
+                    radius: r2,
+                    ..
+                },
+            ) => unsafe { check_collision_spheres(c1, r1, c2, r2) },
+
+            _ => false,
+        }
+    }
+
+    pub fn collides_with_box(&self, bounding_box: impl Into<BoundingBox>) -> bool {
+        match *self {
+            Shape3D::Sphere { center, radius, .. } => unsafe {
+                check_collision_box_sphere(bounding_box.into(), center, radius)
+            },
+            _ => false,
+        }
+    }
+}
+
 impl<'t> From<Ray> for Shape3D<'t> {
     fn from(ray: Ray) -> Self {
         Self::Ray(ray)

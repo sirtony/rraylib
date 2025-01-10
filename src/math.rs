@@ -1488,3 +1488,13 @@ impl From<(Vector4, Vector4, Vector4, Vector4)> for Matrix {
         arr.into()
     }
 }
+
+impl BoundingBox {
+    pub fn new(min: Vector3, max: Vector3) -> Self {
+        Self { min, max }
+    }
+
+    pub fn collides_with(&self, other: &Self) -> bool {
+        unsafe { check_collision_boxes(*self, *other) }
+    }
+}
