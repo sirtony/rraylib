@@ -13,6 +13,105 @@ use std::path::Path;
 use std::ptr::{addr_of, addr_of_mut};
 use std::sync::MutexGuard;
 
+#[derive(Debug, Clone, Copy)]
+pub struct Kernel<const N: usize>([f32; N]);
+
+impl<const N: usize> Kernel<N> {
+    pub fn new() -> Self {
+        Self([0.0; N])
+    }
+
+    pub fn get_at(&self, x: usize, y: usize) -> Option<f32> {
+        let idx = x + y * N;
+        self.get(idx)
+    }
+
+    pub fn get_at_mut(&mut self, x: usize, y: usize) -> Option<&mut f32> {
+        let idx = x + y * N;
+        self.get_mut(idx)
+    }
+
+    pub fn get(&self, idx: usize) -> Option<f32> {
+        if idx >= N {
+            None
+        } else {
+            Some(self.0[idx])
+        }
+    }
+
+    pub fn get_mut(&mut self, idx: usize) -> Option<&mut f32> {
+        if idx >= N {
+            None
+        } else {
+            Some(&mut self.0[idx])
+        }
+    }
+
+    pub fn set(&mut self, idx: usize, value: f32) {
+        if let Some(v) = self.get_mut(idx) {
+            *v = value;
+        }
+    }
+
+    pub fn set_at(&mut self, x: usize, y: usize, value: f32) {
+        let idx = x + y * N;
+        self.set(idx, value);
+    }
+
+    pub fn len(&self) -> usize {
+        N * N
+    }
+
+    pub fn is_empty(&self) -> bool {
+        false
+    }
+
+    pub fn iter(&self) -> std::slice::Iter<'_, f32> {
+        self.0.iter()
+    }
+
+    pub fn into_iter(self) -> std::array::IntoIter<f32, N> {
+        self.0.into_iter()
+    }
+
+    pub fn try_copy_from<I>(&mut self, iter: I) -> Result<()>
+    where
+        I: IntoIterator<Item = f32> + ExactSizeIterator,
+    {
+        // raylib's kernel convolution requires the kernel to be square.
+        // the function does check this, but it returns early and prints a warning to stderr and
+        // allows execution to continue as normal, so we check here and return an error if
+        // the kernel is not square to avoid any surprises.
+        let sqr_root = (iter.len() as f32).sqrt() as usize;
+        if sqr_root != N {
+            return Err(Error::KernelNotSquare);
+        }
+
+        if iter.len() != N * N {
+            return Err(Error::InsufficientData(format!(
+                "{0}x{0} kernel (expected {1} floats, but only got {2})",
+                N,
+                N * N,
+                iter.len()
+            )));
+        }
+
+        let mut iter = iter.into_iter();
+        for i in 0..N {
+            // calling unwrap won't trigger a panic because we guaranteed the length above
+            self.set(i, iter.next().unwrap());
+        }
+
+        Ok(())
+    }
+}
+
+impl<const N: usize> Default for Kernel<N> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum Scaling {
     Bicubic,
@@ -333,12 +432,9 @@ impl Image {
         unsafe { image_blur_gaussian(ptr, blur_size) }
     }
 
-    pub fn kernel_convolution(&mut self, kernel: impl AsRef<[f32]> + ExactSizeIterator) {
-        let len = kernel.len();
-        let kernel = kernel.as_ref();
-        let kernel = kernel.as_ptr();
+    pub fn kernel_convolution<const N: usize>(&mut self, kernel: &Kernel<N>) {
         let ptr = addr_of_mut!(self.img);
-        unsafe { image_kernel_convolution(ptr, kernel, len as i32) }
+        unsafe { image_kernel_convolution(ptr, kernel.0.as_ptr(), kernel.len() as i32) }
     }
 
     pub fn resize(&mut self, new_size: impl Into<Vector2>, algorithm: Scaling) {

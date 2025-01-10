@@ -29,6 +29,12 @@ pub enum Error {
         noun: &'static str,
     },
 
+    #[error("Kernel must be square")]
+    KernelNotSquare,
+
+    #[error("Insufficient data for {0}")]
+    InsufficientData(String),
+
     #[error("{0}")]
     Generic(String),
 }
