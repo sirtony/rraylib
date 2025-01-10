@@ -1,2 +1,0 @@
-   Compiling rraylib v0.1.0 (/home/tony/Documents/GitHub/rraylib)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 9.59s
