@@ -1,5 +1,5 @@
 use crate::sys::*;
-use crate::{guarded, newtype};
+use crate::{getter, guarded, newtype, property};
 use std::ffi::{c_uint, c_void, CString};
 use std::path::Path;
 use std::ptr::addr_of;
@@ -8,9 +8,30 @@ use std::time::Duration;
 
 guarded!(AudioDevice);
 newtype!(Wave, @unload_wave);
+impl Wave {
+    getter!(frame_count: u32);
+    getter!(sample_rate: u32);
+    getter!(sample_size: u32);
+    getter!(channels: u32);
+}
+
 newtype!(Sound, @unload_sound);
+impl Sound {
+    getter!(frame_count: u32);
+
+}
 newtype!(Music, @unload_music_stream);
+impl Music {
+    getter!(frame_count: u32);
+    property!(looping: bool);
+}
+
 newtype!(AudioStream, @unload_audio_stream);
+impl AudioStream {
+    getter!(sample_rate: u32);
+    getter!(sample_size: u32);
+    getter!(channels: u32);
+}
 
 pub struct Processor<'a> {
     stream: Option<&'a AudioStream>,

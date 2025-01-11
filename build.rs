@@ -304,8 +304,8 @@ fn main() -> anyhow::Result<()> {
         .blocklist_var(".*?_H$")
         .blocklist_var("^__.*")
         .blocklist_item("^(.*?_)?PI$")
-        .blocklist_item("DEG2RAD")
-        .blocklist_item("RAD2DEG")
+        .blocklist_item("^DEG2RAD$")
+        .blocklist_item("^RAD2DEG$")
         .no_copy(no_copy)
         .disable_header_comment()
         .layout_tests(false)
@@ -376,6 +376,8 @@ fn main() -> anyhow::Result<()> {
     cc::Build::new()
         .include(&dir)
         .file(&wrapper)
+        // physac has a ton of warnings that aren't relevant for us and that we can't easily resolve,
+        // so we'll silence them
         .warnings(false)
         .compile("rraylib");
 
@@ -434,7 +436,7 @@ fn main() -> anyhow::Result<()> {
     }
 
     let out_dir = config.build();
-    let search_dirs = vec!["lib64", "lib", "bin"];
+    let search_dirs = vec!["lib64", "lib32", "lib", "bin"];
     for search_dir in search_dirs {
         let search_dir = out_dir.join(search_dir);
         println!(

@@ -152,6 +152,10 @@ impl GlyphInfo {
 
 newtype!(Shader, @unload_shader);
 
+impl Shader {
+    getter!(id: u32);
+}
+
 newtype!(Font, @unload_font);
 impl Font {
     getter!(base_size: i32 );
@@ -244,6 +248,15 @@ newtype!(
 );
 
 impl Image {
+    getter!(width: u32);
+    getter!(height: u32);
+    getter!(mipmaps: i32);
+
+    pub fn format( &self ) -> PixelFormat {
+        let ptr = unsafe { self.as_raw() };
+        unsafe { std::mem::transmute(ptr.format) }
+    }
+
     pub fn from_file(file_name: impl AsRef<Path>) -> Result<Self> {
         let file_name = file_name.as_ref().as_os_str().as_encoded_bytes();
         let file_name = CString::new(file_name)?;
@@ -627,14 +640,6 @@ impl Image {
         let loc = loc.into();
         let (x, y): (i32, i32) = loc.into();
         unsafe { get_image_color(self.as_raw(), x, y) }
-    }
-
-    pub fn width(&self) -> u32 {
-        unsafe { self.as_raw().width as u32 }
-    }
-
-    pub fn height(&self) -> u32 {
-        unsafe { self.as_raw().height as u32 }
     }
 
     pub fn size(&self) -> (u32, u32) {

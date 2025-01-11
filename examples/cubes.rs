@@ -9,11 +9,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let rl = rraylib::init(options)?;
     let window = rl.window()?;
 
-    let mut camera = Camera3D::default()
-        .positionf(-7.0, 7.0, -7.0)
-        .targetf(0.0, 0.0, 0.0)
+    let mut camera = Camera3D::builder()
+        .position((-7.0, 7.0, -7.0).into())
+        .target(Vector3::ZERO)
+        .up(Vector3::UP)
         .fovy(70.0)
-        .projection(CameraProjection::Perspective);
+        .projection(CameraProjection::Perspective as i32)
+        .build();
 
     let plane = Shape3D::Plane {
         center: Vector3::ZERO,

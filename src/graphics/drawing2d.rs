@@ -4,14 +4,41 @@ use crate::error::Error;
 use crate::graphics::shapes::Shape2D;
 use crate::graphics::Drawing;
 use crate::sys::*;
-use crate::{newtype, try_lock};
+use crate::{getter, newtype, try_lock};
 use std::ffi::{c_void, CString};
 use std::path::Path;
 use std::ptr::addr_of;
 use std::sync::MutexGuard;
 
 newtype!(Texture, @unload_texture);
+
+impl Texture {
+    getter!(width: u32);
+    getter!(height: u32);
+    getter!(mipmaps: u32);
+
+    pub fn format(&self) -> PixelFormat{
+        unsafe { std::mem::transmute(self.as_raw().format) }
+    }
+}
+
 newtype!(RenderTexture, @unload_render_texture);
+
+impl RenderTexture {
+    pub fn texture(&self) -> Texture {
+        unsafe {
+            let ptr = self.as_raw();
+            Texture::unowned(ptr.texture)
+        }
+    }
+
+pub fn depth(&self) -> Texture {
+    unsafe {
+        let ptr = self.as_raw();
+        Texture::unowned(ptr.depth)
+    }
+}
+}
 
 pub trait Drawables2D {
     fn draw_shape<'t>(
@@ -675,39 +702,6 @@ impl From<crate::graphics::Image> for Texture {
 }
 
 impl Camera2D {
-    pub fn new(offset: Vector2, target: Vector2, rotation: f32, zoom: f32) -> Self {
-        Self {
-            offset,
-            target,
-            rotation,
-            zoom,
-        }
-    }
-
-    pub fn offset(&self, offset: Vector2) -> Self {
-        Self { offset, ..*self }
-    }
-
-    pub fn offsetf(&self, x: f32, y: f32) -> Self {
-        self.offset(Vector2::new(x, y))
-    }
-
-    pub fn target(&self, target: Vector2) -> Self {
-        Self { target, ..*self }
-    }
-
-    pub fn targetf(&self, x: f32, y: f32) -> Self {
-        self.target(Vector2::new(x, y))
-    }
-
-    pub fn rotation(&self, rotation: f32) -> Self {
-        Self { rotation, ..*self }
-    }
-
-    pub fn zoom(&self, zoom: f32) -> Self {
-        Self { zoom, ..*self }
-    }
-
     pub fn world_to_screen(&self, position: Vector2) -> Vector2 {
         unsafe { get_world_to_screen_2d(position, *self) }
     }

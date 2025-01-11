@@ -1,12 +1,11 @@
 #![allow(clippy::too_many_arguments)]
 
 use crate::error::{Error, Result};
-use crate::graphics::drawing2d::Texture;
+use crate::graphics::drawing2d::{Texture};
 use crate::graphics::shapes::Shape3D;
-use crate::graphics::Drawing;
-use crate::graphics::Image;
+use crate::graphics::{ Drawing, Image };
 use crate::sys::*;
-use crate::{newtype, try_lock};
+use crate::{getter, newtype, try_lock};
 use std::ffi::CString;
 use std::path::Path;
 use std::ptr::{addr_of, addr_of_mut};
@@ -15,8 +14,19 @@ use std::sync::MutexGuard;
 newtype!(VrStereoConfig, @unload_vr_stereo_config);
 newtype!(Model, @unload_model);
 newtype!(Mesh, @unload_mesh);
-newtype!(Material, @unload_material);
 newtype!(ModelAnimation, @unload_model_animation);
+newtype!(Material, @unload_material);
+
+newtype!(MaterialMap);
+impl MaterialMap {
+    getter!(color: Color);
+    getter!(value: f32);
+
+    pub fn texture(&self) -> Texture {
+        let ptr = unsafe { self.as_raw() };
+        Texture::unowned(ptr.texture)
+    }
+}
 
 pub trait Drawables3D {
     fn draw_shape<'t>(
@@ -443,44 +453,6 @@ impl Drop for DrawingVr<'_> {
 }
 
 impl Camera3D {
-    pub fn position(&self, pos: Vector3) -> Self {
-        Self {
-            position: pos,
-            ..*self
-        }
-    }
-
-    pub fn positionf(&self, x: f32, y: f32, z: f32) -> Self {
-        self.position(Vector3::new(x, y, z))
-    }
-
-    pub fn target(&self, target: Vector3) -> Self {
-        Self { target, ..*self }
-    }
-
-    pub fn targetf(&self, x: f32, y: f32, z: f32) -> Self {
-        self.target(Vector3::new(x, y, z))
-    }
-
-    pub fn up(&self, up: Vector3) -> Self {
-        Self { up, ..*self }
-    }
-
-    pub fn upf(&self, x: f32, y: f32, z: f32) -> Self {
-        self.up(Vector3::new(x, y, z))
-    }
-
-    pub fn fovy(&self, fovy: f32) -> Self {
-        Self { fovy, ..*self }
-    }
-
-    pub fn projection(&self, projection: CameraProjection) -> Self {
-        Self {
-            projection: projection as i32,
-            ..*self
-        }
-    }
-
     pub fn perspective(position: Vector3, target: Vector3, up: Vector3, fovy: f32) -> Self {
         Self {
             position,
@@ -522,7 +494,7 @@ impl Default for Camera3D {
     }
 }
 
-impl Camera {
+impl Camera3D {
     pub fn screen_to_world(&self, position: Vector2) -> Ray {
         unsafe { get_screen_to_world_ray(position, *self) }
     }

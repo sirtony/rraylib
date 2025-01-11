@@ -1,7 +1,13 @@
 use crate::sys::*;
-use crate::Result;
+use crate::{getter, newtype, Result};
 use std::ffi::CString;
 use std::path::Path;
+
+newtype!(AutomationEvent);
+impl AutomationEvent {
+    getter!(r#type: u32);
+    getter!(frame: u32);
+}
 
 pub struct AutomationPlayback<'a> {
     automation: &'a mut Automation,
@@ -44,6 +50,11 @@ crate::utils::newtype!(
     @unload_automation_event_list
 );
 
+impl Automation {
+    getter!(capacity: u32);
+    getter!(count: u32);
+}
+
 impl Default for Automation {
     fn default() -> Self {
         Self::new()
@@ -77,6 +88,15 @@ impl Automation {
         }
 
         Ok(())
+    }
+
+    pub fn events(&self) -> Vec<AutomationEvent> {
+        let mut events = Vec::with_capacity(self.count() as usize);
+        for i in 0..self.count() {
+            let evt = unsafe { self.inner.events.add(i as usize).read() };
+            events.push(AutomationEvent::unowned(evt));
+        }
+        events
     }
 
     pub fn start_recording(&mut self) {
