@@ -183,11 +183,25 @@ impl PhysicsBody {
                 end: *v2,
                 thickness: None,
             }),
-            [v1, v2, v3] => Some(Shape2D::Triangle {
-                v1: *v3,
-                v2: *v2,
-                v3: *v1,
-            }),
+            [v1, v2, v3] => {
+                let mut top_vert = *v3;
+                let mut bottom_right_vert = *v2;
+                let mut bottom_left_vert = *v1;
+                let height = top_vert.y - bottom_right_vert.y;
+
+                // because the verticies are relative to a center point, we need to shift the Y
+                // coordinate of all 3 verticies down by half the triangle's height
+                // to align the shape with the physics body
+                top_vert.y = top_vert.y - height / 2.0;
+                bottom_left_vert.y = bottom_left_vert.y - height / 2.0;
+                bottom_right_vert.y = bottom_right_vert.y - height / 2.0;
+
+                Some(Shape2D::Triangle {
+                    v1: top_vert,
+                    v2: bottom_right_vert,
+                    v3: bottom_left_vert,
+                })
+            }
             [v1, v2, v3, v4] => {
                 let width = v2.x - v3.x;
                 let height = v3.y - v4.y;
@@ -210,7 +224,7 @@ impl PhysicsBody {
                     side_length / (2.0 * (std::f32::consts::PI / verts.len() as f32).sin());
 
                 Some(Shape2D::Polygon {
-                    center: Vector2 { x: mid_x, y: mid_y },
+                    center: Vector2 { x: mid_x, y: mid_y + radius / 2.0 },
                     sides: verts.len() as i32,
                     radius,
                     rotation: self.rotation(),
