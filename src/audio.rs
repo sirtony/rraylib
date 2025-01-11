@@ -2,7 +2,7 @@ use crate::sys::*;
 use crate::{guarded, newtype};
 use std::ffi::{c_uint, c_void, CString};
 use std::path::Path;
-use std::ptr::{addr_of, addr_of_mut};
+use std::ptr::addr_of;
 use std::sync::MutexGuard;
 use std::time::Duration;
 
@@ -88,17 +88,22 @@ impl Wave {
         if !unsafe { is_wave_valid(ptr.read()) } {
             return Err(crate::Error::UnableToLoad("wave"));
         }
-        Ok(Self(wav))
+        Ok(Self::owned(wav))
     }
 
     pub fn crop(&mut self, first_frame: u32, final_frame: u32) {
-        let ptr = addr_of_mut!(self.0);
-        unsafe { wave_crop(ptr, first_frame as i32, final_frame as i32) }
+        unsafe { wave_crop(self.as_mut_ptr(), first_frame as i32, final_frame as i32) }
     }
 
     pub fn format(&mut self, sample_rate: u32, sample_size: u32, channels: u32) {
-        let ptr = addr_of_mut!(self.0);
-        unsafe { wave_format(ptr, sample_rate as i32, sample_size as i32, channels as i32) }
+        unsafe {
+            wave_format(
+                self.as_mut_ptr(),
+                sample_rate as i32,
+                sample_size as i32,
+                channels as i32,
+            )
+        }
     }
 
     pub fn samples(&self) -> Vec<f32> {
@@ -130,7 +135,7 @@ impl Wave {
 
 impl Clone for Wave {
     fn clone(&self) -> Self {
-        Self(unsafe { wave_copy(self.as_raw()) })
+        Self::owned(unsafe { wave_copy(self.as_raw()) })
     }
 }
 
@@ -143,7 +148,7 @@ impl Sound {
         if !unsafe { is_sound_valid(ptr.read()) } {
             return Err(crate::Error::UnableToLoad("sound"));
         }
-        Ok(Self(sound))
+        Ok(Self::owned(sound))
     }
 
     pub fn update(&mut self, samples: impl AsRef<[f32]> + ExactSizeIterator) {
@@ -203,7 +208,7 @@ impl Music {
         if !unsafe { is_music_valid(ptr.read()) } {
             return Err(crate::Error::UnableToLoad("music"));
         }
-        Ok(Self(music))
+        Ok(Self::owned(music))
     }
 
     pub fn seek(&mut self, position: Duration) {
@@ -267,7 +272,7 @@ impl AudioStream {
             return Err(crate::Error::UnableToLoad("audio stream"));
         }
 
-        Ok(Self(stream))
+        Ok(Self::owned(stream))
     }
 
     pub fn update(&mut self, samples: impl AsRef<[f32]> + ExactSizeIterator) {

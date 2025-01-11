@@ -2,7 +2,6 @@ use crate::sys::*;
 use crate::Result;
 use std::ffi::CString;
 use std::path::Path;
-use std::ptr::addr_of_mut;
 
 pub struct AutomationPlayback<'a> {
     automation: &'a mut Automation,
@@ -18,7 +17,7 @@ impl AutomationPlayback<'_> {
         unsafe {
             let evt = self
                 .automation
-                .0
+                .inner
                 .events
                 .wrapping_add(self.current_frame as usize);
             play_automation_event(*evt);
@@ -32,7 +31,7 @@ impl AutomationPlayback<'_> {
     }
 
     pub fn is_finished(&self) -> bool {
-        self.current_frame >= self.automation.0.count
+        self.current_frame >= self.automation.inner.count
     }
 
     pub fn reset(&mut self) {
@@ -54,7 +53,7 @@ impl Default for Automation {
 impl Automation {
     pub fn new() -> Self {
         let ptr = unsafe { load_automation_event_list(std::ptr::null()) };
-        Self(ptr)
+        Self::owned(ptr)
     }
 
     pub fn from_file(file_name: impl AsRef<Path>) -> Result<Self> {
@@ -66,7 +65,7 @@ impl Automation {
             return Err(crate::Error::UnableToLoad("automation events"));
         }
 
-        Ok(Self(ptr))
+        Ok(Self::owned(ptr))
     }
 
     pub fn save(&self, file_name: impl AsRef<Path>) -> Result<()> {
@@ -82,7 +81,7 @@ impl Automation {
 
     pub fn start_recording(&mut self) {
         unsafe {
-            set_automation_event_list(addr_of_mut!(self.0));
+            set_automation_event_list(self.as_mut_ptr());
             start_automation_event_recording();
         }
     }

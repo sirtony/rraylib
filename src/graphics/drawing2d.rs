@@ -7,7 +7,7 @@ use crate::sys::*;
 use crate::{newtype, try_lock};
 use std::ffi::{c_void, CString};
 use std::path::Path;
-use std::ptr::{addr_of, addr_of_mut};
+use std::ptr::addr_of;
 use std::sync::MutexGuard;
 
 newtype!(Texture, unload_texture);
@@ -615,7 +615,7 @@ impl RenderTexture {
         if !unsafe { is_render_texture_valid(ptr.read()) } {
             return Err(Error::UnableToLoad("render texture"));
         }
-        Ok(Self(tex))
+        Ok(Self::owned(tex))
     }
 }
 
@@ -628,7 +628,7 @@ impl Texture {
         if !unsafe { is_texture_valid(ptr.read()) } {
             return Err(Error::UnableToLoad("texture"));
         }
-        Ok(Self(tex))
+        Ok(Self::owned(tex))
     }
 
     pub fn from_cubemap(
@@ -641,7 +641,7 @@ impl Texture {
         if !unsafe { is_texture_valid(ptr.read()) } {
             return Err(Error::UnableToLoad("texture"));
         }
-        Ok(Self(tex))
+        Ok(Self::owned(tex))
     }
 
     pub fn update(&mut self, pixels: impl AsRef<[u8]>) {
@@ -656,8 +656,7 @@ impl Texture {
     }
 
     pub fn compute_mipmaps(&mut self) {
-        let ptr = addr_of_mut!(self.0);
-        unsafe { gen_texture_mipmaps(ptr) }
+        unsafe { gen_texture_mipmaps(self.as_mut_ptr()) }
     }
 
     pub fn filter_mode(&mut self, filter: TextureFilter) {
@@ -671,7 +670,7 @@ impl Texture {
 
 impl From<crate::graphics::Image> for Texture {
     fn from(img: crate::graphics::Image) -> Self {
-        Self(unsafe { load_texture_from_image(img.as_raw()) })
+        Self::owned(unsafe { load_texture_from_image(img.as_raw()) })
     }
 }
 

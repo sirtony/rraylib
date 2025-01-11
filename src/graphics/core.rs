@@ -136,7 +136,7 @@ impl Font {
         if !unsafe { is_font_valid(ptr.read()) } {
             return Err(Error::UnableToLoad("font"));
         }
-        Ok(Self(font))
+        Ok(Self::owned(font))
     }
 
     pub fn from_image(img: &Image, key: impl Into<Color>, first_char: i32) -> Result<Self> {
@@ -146,7 +146,7 @@ impl Font {
         if !unsafe { is_font_valid(ptr.read()) } {
             return Err(Error::UnableToLoad("font"));
         }
-        Ok(Self(font))
+        Ok(Self::owned(font))
     }
 
     pub fn glyph(&self, codepoint: i32) -> GlyphInfo {
@@ -164,7 +164,8 @@ impl Font {
 
 impl Default for Font {
     fn default() -> Self {
-        Self(unsafe { get_font_default() })
+        // don't claim ownership of the default font so the Drop impl doesn't attempt to free it
+        Self::unowned(unsafe { get_font_default() })
     }
 }
 
@@ -1014,7 +1015,7 @@ impl Shader {
         if !unsafe { is_shader_valid(ptr.read()) } {
             Err(Error::UnableToLoad("shader"))
         } else {
-            Ok(Self(shader))
+            Ok(Self::owned(shader))
         }
     }
 

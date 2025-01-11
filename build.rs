@@ -237,7 +237,7 @@ fn main() -> anyhow::Result<()> {
         writeln!(file, "#define RAYGUI_IMPLEMENTATION")?;
     }
 
-if USE_PHYSAC {
+    if USE_PHYSAC {
         writeln!(file, "#define PHYSAC_IMPLEMENTATION")?;
     }
 

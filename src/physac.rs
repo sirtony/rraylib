@@ -6,19 +6,10 @@ pub use crate::sys::{
     PhysicsShape, CIRCLE_VERTICES, COLLISION_ITERATIONS, MAX_BODIES, MAX_MANIFOLDS, MAX_VERTICES,
     PENETRATION_ALLOWANCE, PENETRATION_CORRECTION,
 };
-use crate::{guarded, info, newtype};
+use crate::{guarded, newtype};
 use std::sync::MutexGuard;
 
-newtype!(PhysicsBody);
-
-impl Drop for PhysicsBody {
-    fn drop(&mut self) {
-        eprintln!("PhysicsBody {} dropped", self.id());
-        if !self.0.is_null() && self.id() < MAX_BODIES {
-            unsafe { destroy_physics_body(self.as_raw()) }
-        }
-    }
-}
+newtype!(PhysicsBody, destroy_physics_body);
 
 impl PhysicsBody {
     pub fn add_force(&mut self, force: impl Into<Vector2>) {
@@ -46,7 +37,7 @@ impl PhysicsBody {
         Some(unsafe { std::mem::transmute(shape) })
     }
 
-    pub fn shape(&self) -> Option<Shape2D> {
+    pub fn get_shape(&self) -> Option<Shape2D> {
         let verts = self.vertices();
         match verts.as_slice() {
             [] => None,
@@ -76,29 +67,30 @@ impl PhysicsBody {
                     rotation: None,
                 })
             }
-            [verts @ ..] => {
-                let mid_x = verts.iter().map( | x | x.x ).sum::<f32>() / verts.len() as f32;
-                let mid_y = verts.iter().map( | x | x.y ).sum::<f32>() / verts.len() as f32;
+            verts => {
+                let mid_x = verts.iter().map(|x| x.x).sum::<f32>() / verts.len() as f32;
+                let mid_y = verts.iter().map(|x| x.y).sum::<f32>() / verts.len() as f32;
                 let side_length = (verts[0].x - verts[1].x).hypot(verts[0].y - verts[1].y);
-                let radius = side_length / (2.0 * (std::f32::consts::PI / verts.len() as f32).sin());
+                let radius =
+                    side_length / (2.0 * (std::f32::consts::PI / verts.len() as f32).sin());
 
                 Some(Shape2D::Polygon {
                     center: Vector2 { x: mid_x, y: mid_y },
                     sides: verts.len() as i32,
                     radius,
-                    rotation: 0.0,
+                    rotation: self.rotation(),
                 })
             }
         }
     }
 
-    pub fn vertices_count(&self) -> Option<usize> {
+    pub fn vertex_count(&self) -> Option<usize> {
         let idx = unsafe { (*self.as_raw()).id as i32 };
         Some(unsafe { get_physics_shape_vertices_count(idx) as usize })
     }
 
     pub fn vertex(&self, index: usize) -> Option<Vector2> {
-        let count = self.vertices_count()?;
+        let count = self.vertex_count()?;
 
         if index >= count {
             return None;
@@ -108,7 +100,7 @@ impl PhysicsBody {
     }
 
     pub fn vertices(&self) -> Vec<Vector2> {
-        if let Some(count) = self.vertices_count() {
+        if let Some(count) = self.vertex_count() {
             (0..count).filter_map(|x| self.vertex(x)).collect()
         } else {
             Vec::new()
@@ -125,11 +117,11 @@ impl PhysicsBody {
         unsafe { (*self.as_raw()).id }
     }
 
-    pub fn is_enabled(&self) -> bool {
+    pub fn enabled(&self) -> bool {
         unsafe { (*self.as_raw()).enabled }
     }
 
-    pub fn enabled(&mut self, enabled: bool) {
+    pub fn set_enabled(&mut self, enabled: bool) {
         unsafe {
             let ptr = self.as_raw();
             (*ptr).enabled = enabled;
@@ -235,29 +227,29 @@ impl PhysicsBody {
         unsafe { (*self.as_raw()).use_gravity }
     }
 
-    pub fn use_gravity(&mut self, use_gravity: bool) {
+    pub fn set_gravity(&mut self, gravity: bool) {
         unsafe {
             let ptr = self.as_raw();
-            (*ptr).use_gravity = use_gravity;
+            (*ptr).use_gravity = gravity;
         }
     }
 
-    pub fn is_grounded(&self) -> bool {
+    pub fn grounded(&self) -> bool {
         unsafe { (*self.as_raw()).is_grounded }
     }
 
-    pub fn grounded(&mut self, is_grounded: bool) {
+    pub fn set_grounded(&mut self, is_grounded: bool) {
         unsafe {
             let ptr = self.as_raw();
             (*ptr).is_grounded = is_grounded;
         }
     }
 
-    pub fn allows_rotation(&self) -> bool {
+    pub fn allow_rotation(&self) -> bool {
         unsafe { (*self.as_raw()).freeze_orient }
     }
 
-    pub fn allow_rotation(&mut self, freeze_orient: bool) {
+    pub fn set_allow_rotation(&mut self, freeze_orient: bool) {
         unsafe {
             let ptr = self.as_raw();
             (*ptr).freeze_orient = freeze_orient;
@@ -290,7 +282,7 @@ impl PhysicsBody {
         unsafe { (*self.as_raw()).inverse_mass }
     }
 
-pub fn set_inverse_mass(&mut self, inverse_mass: f32) {
+    pub fn set_inverse_mass(&mut self, inverse_mass: f32) {
         unsafe {
             let ptr = self.as_raw();
             (*ptr).inverse_mass = inverse_mass;
@@ -301,7 +293,7 @@ pub fn set_inverse_mass(&mut self, inverse_mass: f32) {
         unsafe { (*self.as_raw()).inverse_inertia }
     }
 
-pub fn set_inverse_inertia(&mut self, inverse_inertia: f32) {
+    pub fn set_inverse_inertia(&mut self, inverse_inertia: f32) {
         unsafe {
             let ptr = self.as_raw();
             (*ptr).inverse_inertia = inverse_inertia;
@@ -360,13 +352,20 @@ impl<'a> Physics<'a> {
         }
     }
 
-    pub fn create_rectangle(&mut self, rc: impl Into<Rectangle>, density: f32) -> crate::Result<PhysicsBody> {
+    pub fn create_rectangle(
+        &mut self,
+        rc: impl Into<Rectangle>,
+        density: f32,
+    ) -> crate::Result<PhysicsBody> {
         if PhysicsBody::count() >= MAX_BODIES as usize {
             Err(crate::Error::TooManyPhysicsBodies)
         } else {
             let rc = rc.into();
             let (width, height) = rc.size().into();
-            Ok(unsafe { create_physics_body_rectangle(rc.position(), width, height, density) }.into())
+            Ok(
+                unsafe { create_physics_body_rectangle(rc.position(), width, height, density) }
+                    .into(),
+            )
         }
     }
 
@@ -380,7 +379,10 @@ impl<'a> Physics<'a> {
         if PhysicsBody::count() >= MAX_BODIES as usize {
             Err(crate::Error::TooManyPhysicsBodies)
         } else {
-            Ok(unsafe { create_physics_body_polygon(pos.into(), radius, sides as i32, density) }.into())
+            Ok(
+                unsafe { create_physics_body_polygon(pos.into(), radius, sides as i32, density) }
+                    .into(),
+            )
         }
     }
 }

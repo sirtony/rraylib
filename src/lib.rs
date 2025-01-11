@@ -35,6 +35,10 @@ pub mod audio;
 #[cfg(feature = "physac")]
 pub mod physac;
 
+/// GUI controls and utilities.
+#[cfg(feature = "raygui")]
+pub mod gui;
+
 use crate::audio::AudioDevice;
 use crate::display::Window;
 use crate::graphics::Drawing;
@@ -93,7 +97,7 @@ impl Default for Options {
     }
 }
 
-guarded!(base Context, window, drawing, audio, physics);
+guarded!(base Context, window, drawing, audio, physics, gui);
 
 impl Context {
     pub fn window(&self) -> Result<Window> {
@@ -114,6 +118,16 @@ impl Context {
     pub fn physics(&self) -> Result<physac::Physics<'_>> {
         let guard = try_lock!(self.physics).ok_or(Error::ThreadAlreadyLocked("physics"))?;
         Ok(physac::Physics::get(guard))
+    }
+
+    #[cfg(feature = "raygui")]
+    pub fn ui(&self) -> Result<gui::Ui<'_>> {
+        let guard = try_lock!(self.gui).ok_or(Error::ThreadAlreadyLocked("gui"))?;
+        unsafe {
+            gui_enable();
+            gui_unlock();
+        }
+        Ok(gui::Ui::new(guard))
     }
 
     pub fn begin_drawing(&self) -> Result<Drawing> {

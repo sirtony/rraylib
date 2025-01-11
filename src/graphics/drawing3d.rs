@@ -561,7 +561,7 @@ impl Model {
             return Err(Error::UnableToLoad("model"));
         }
 
-        Ok(Self(model))
+        Ok(Self::owned(model))
     }
 
     pub fn bounding_box(&self) -> BoundingBox {
@@ -569,79 +569,77 @@ impl Model {
     }
 
     pub fn set_mesh_material(&mut self, mesh_id: u32, material_id: u32) {
-        let ptr = addr_of_mut!(self.0);
-        unsafe { set_model_mesh_material(ptr, mesh_id as i32, material_id as i32) }
+        unsafe { set_model_mesh_material(self.as_mut_ptr(), mesh_id as i32, material_id as i32) }
     }
 }
 
 impl From<Mesh> for Model {
     fn from(mesh: Mesh) -> Self {
-        Self(unsafe { load_model_from_mesh(mesh.as_raw()) })
+        Self::owned(unsafe { load_model_from_mesh(mesh.as_raw()) })
     }
 }
 
 impl Mesh {
     pub fn from_polygon(sides: u32, radius: f32) -> Self {
-        Self(unsafe { gen_mesh_poly(sides as i32, radius) })
+        Self::owned(unsafe { gen_mesh_poly(sides as i32, radius) })
     }
 
     pub fn from_plane(width: f32, height: f32, res_x: i32, res_y: i32) -> Self {
-        Self(unsafe { gen_mesh_plane(width, height, res_x, res_y) })
+        Self::owned(unsafe { gen_mesh_plane(width, height, res_x, res_y) })
     }
 
     pub fn from_planev(size: impl Into<Vector2>, res: impl Into<Vector2>) -> Self {
         let size = size.into();
         let res = res.into();
         let (res_x, res_y): (i32, i32) = res.into();
-        Self(unsafe { gen_mesh_plane(size.x, size.y, res_x, res_y) })
+        Self::owned(unsafe { gen_mesh_plane(size.x, size.y, res_x, res_y) })
     }
 
     pub fn from_cube(width: f32, height: f32, length: f32) -> Self {
-        Self(unsafe { gen_mesh_cube(width, height, length) })
+        Self::owned(unsafe { gen_mesh_cube(width, height, length) })
     }
 
     pub fn from_cubev(size: impl Into<Vector3>) -> Self {
         let size = size.into();
-        Self(unsafe { gen_mesh_cube(size.x, size.y, size.z) })
+        Self::owned(unsafe { gen_mesh_cube(size.x, size.y, size.z) })
     }
 
     pub fn from_sphere(radius: f32, rings: i32, slices: i32) -> Self {
-        Self(unsafe { gen_mesh_sphere(radius, rings, slices) })
+        Self::owned(unsafe { gen_mesh_sphere(radius, rings, slices) })
     }
 
     pub fn from_hemisphere(radius: f32, rings: i32, slices: i32) -> Self {
-        Self(unsafe { gen_mesh_hemi_sphere(radius, rings, slices) })
+        Self::owned(unsafe { gen_mesh_hemi_sphere(radius, rings, slices) })
     }
 
     pub fn from_cylinder(radius: f32, height: f32, slices: i32) -> Self {
-        Self(unsafe { gen_mesh_cylinder(radius, height, slices) })
+        Self::owned(unsafe { gen_mesh_cylinder(radius, height, slices) })
     }
 
     pub fn from_cone(radius: f32, height: f32, slices: i32) -> Self {
-        Self(unsafe { gen_mesh_cone(radius, height, slices) })
+        Self::owned(unsafe { gen_mesh_cone(radius, height, slices) })
     }
 
     pub fn from_torus(radius: f32, size: f32, rad_seg: i32, sides: i32) -> Self {
-        Self(unsafe { gen_mesh_torus(radius, size, rad_seg, sides) })
+        Self::owned(unsafe { gen_mesh_torus(radius, size, rad_seg, sides) })
     }
 
     pub fn from_knot(radius: f32, size: f32, rad_seg: i32, sides: i32) -> Self {
-        Self(unsafe { gen_mesh_knot(radius, size, rad_seg, sides) })
+        Self::owned(unsafe { gen_mesh_knot(radius, size, rad_seg, sides) })
     }
 
     pub fn from_heightmap(heightmap: &Image, size: impl Into<Vector3>) -> Self {
         let size = size.into();
-        Self(unsafe { gen_mesh_heightmap(heightmap.as_raw(), size) })
+        Self::owned(unsafe { gen_mesh_heightmap(heightmap.as_raw(), size) })
     }
 
     pub fn from_cubic_map(cubic_map: &Image, size: impl Into<Vector3>) -> Self {
         let size = size.into();
-        Self(unsafe { gen_mesh_cubicmap(cubic_map.as_raw(), size) })
+        Self::owned(unsafe { gen_mesh_cubicmap(cubic_map.as_raw(), size) })
     }
 
     pub fn upload(&mut self, dynamic: bool) -> Result<()> {
-        let ptr = addr_of_mut!(self.0);
-        unsafe { upload_mesh(ptr, dynamic) }
+        unsafe { upload_mesh(self.as_mut_ptr(), dynamic) }
         Ok(())
     }
 
@@ -650,8 +648,7 @@ impl Mesh {
     }
 
     pub fn compute_tangents(&mut self) {
-        let ptr = addr_of_mut!(self.0);
-        unsafe { gen_mesh_tangents(ptr) }
+        unsafe { gen_mesh_tangents(self.as_mut_ptr()) }
     }
 
     pub fn save(&self, file_name: impl AsRef<Path>) -> Result<()> {
@@ -677,21 +674,22 @@ impl Material {
             if !unsafe { is_material_valid(ptr.read()) } {
                 return Err(Error::UnableToLoad("material"));
             }
-            vec.push(Self(unsafe { ptr.read() }));
+            vec.push(Self::owned(unsafe { ptr.read() }));
         }
 
         Ok(vec)
     }
 
     pub fn set_texture(&mut self, map_type: MaterialMapIndex, texture: &Texture) {
-        let ptr = addr_of_mut!(self.0);
-        unsafe { set_material_texture(ptr, map_type as i32, texture.as_raw()) }
+        unsafe { set_material_texture(self.as_mut_ptr(), map_type as i32, texture.as_raw()) }
     }
 }
 
 impl Default for Material {
     fn default() -> Self {
-        Self(unsafe { load_material_default() })
+        // it's very important that we don't claim ownership of the default material,
+        // otherwise the Drop impl will attempt to unload the default material causing a segfault
+        Self::unowned(unsafe { load_material_default() })
     }
 }
 
@@ -708,7 +706,7 @@ impl ModelAnimation {
             if !unsafe { is_model_animation_valid(model.as_raw(), ptr.read()) } {
                 return Err(Error::UnableToLoad("model animation"));
             }
-            vec.push(Self(unsafe { ptr.read() }));
+            vec.push(Self::owned(unsafe { ptr.read() }));
         }
 
         Ok(vec)
