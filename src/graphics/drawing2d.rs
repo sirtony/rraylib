@@ -10,8 +10,8 @@ use std::path::Path;
 use std::ptr::addr_of;
 use std::sync::MutexGuard;
 
-newtype!(Texture, unload_texture);
-newtype!(RenderTexture, unload_render_texture);
+newtype!(Texture, @unload_texture);
+newtype!(RenderTexture, @unload_render_texture);
 
 pub trait Drawables2D {
     fn draw_shape<'t>(

@@ -7,10 +7,10 @@ use std::sync::MutexGuard;
 use std::time::Duration;
 
 guarded!(AudioDevice);
-newtype!(Wave, unload_wave);
-newtype!(Sound, unload_sound);
-newtype!(Music, unload_music_stream);
-newtype!(AudioStream, unload_audio_stream);
+newtype!(Wave, @unload_wave);
+newtype!(Sound, @unload_sound);
+newtype!(Music, @unload_music_stream);
+newtype!(AudioStream, @unload_audio_stream);
 
 pub struct Processor<'a> {
     stream: Option<&'a AudioStream>,

@@ -12,11 +12,11 @@ use std::path::Path;
 use std::ptr::{addr_of, addr_of_mut};
 use std::sync::MutexGuard;
 
-newtype!(VrStereoConfig, unload_vr_stereo_config);
-newtype!(Model, unload_model);
-newtype!(Mesh, unload_mesh);
-newtype!(Material, unload_material);
-newtype!(ModelAnimation, unload_model_animation);
+newtype!(VrStereoConfig, @unload_vr_stereo_config);
+newtype!(Model, @unload_model);
+newtype!(Mesh, @unload_mesh);
+newtype!(Material, @unload_material);
+newtype!(ModelAnimation, @unload_model_animation);
 
 pub trait Drawables3D {
     fn draw_shape<'t>(
@@ -26,7 +26,7 @@ pub trait Drawables3D {
     ) -> crate::error::Result<()> {
         match shape.into() {
             Shape3D::Line(start, end) => {
-                unsafe { draw_line_3_d(start, end, color.into()) };
+                unsafe { draw_line_3d(start, end, color.into()) };
                 Ok(())
             }
             Shape3D::Circle {
@@ -36,17 +36,17 @@ pub trait Drawables3D {
                 rotation_angle,
             } => {
                 unsafe {
-                    draw_circle_3_d(center, radius, rotation_axis, rotation_angle, color.into())
+                    draw_circle_3d(center, radius, rotation_axis, rotation_angle, color.into())
                 };
                 Ok(())
             }
             Shape3D::Triangle(v1, v2, v3) => {
-                unsafe { draw_triangle_3_d(v1, v2, v3, color.into()) };
+                unsafe { draw_triangle_3d(v1, v2, v3, color.into()) };
                 Ok(())
             }
             Shape3D::TriangleStrip(points) => {
                 let ptr = points.as_ptr();
-                unsafe { draw_triangle_strip_3_d(ptr, points.len() as i32, color.into()) };
+                unsafe { draw_triangle_strip_3d(ptr, points.len() as i32, color.into()) };
                 Ok(())
             }
             Shape3D::Cube { position, size } => {
@@ -117,7 +117,7 @@ pub trait Drawables3D {
     ) -> crate::error::Result<()> {
         match shape.into() {
             Shape3D::Line(start, end) => {
-                unsafe { draw_line_3_d(start, end, color.into()) };
+                unsafe { draw_line_3d(start, end, color.into()) };
                 Ok(())
             }
             Shape3D::Cube { position, size } => {

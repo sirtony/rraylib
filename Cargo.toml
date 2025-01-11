@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 paste = "1.0.15"
+serde = { version = "1.0.217", features = ["derive"], optional = true }
 thiserror = "2.0.9"
 typed-builder = "0.20.0"
 
@@ -32,3 +33,4 @@ external_glfw = []
 raygui = []
 physac = []
 sdl = []
+serde = ["dep:serde"]

@@ -1,6 +1,6 @@
 use bindgen::callbacks::{EnumVariantValue, ItemInfo, ItemKind, ParseCallbacks};
 use convert_case::{Case, Casing};
-use regex::Regex;
+use regex::{Captures, RegexBuilder};
 use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -18,6 +18,7 @@ const USE_GUI: bool = cfg!(feature = "raygui");
 const USE_PHYSAC: bool = cfg!(feature = "physac");
 const USE_SDL: bool = cfg!(feature = "sdl");
 const USE_EXTERNAL_GLFW: bool = cfg!(feature = "external_glfw");
+const USE_SERDE: bool = cfg!(feature = "serde");
 
 #[derive(Debug, Clone)]
 struct RustyRenamer;
@@ -67,6 +68,11 @@ impl ParseCallbacks for RustyRenamer {
             "GetWorldToScreen2D" => Some("get_world_to_screen_2d".to_string()),
             "GetScreenToWorld2D" => Some("get_screen_to_world_2d".to_string()),
             "GetCameraMatrix2D" => Some("get_camera_matrix_2d".to_string()),
+            "DrawLine3D" => Some("draw_line_3d".to_string()),
+            "DrawPoint3D" => Some("draw_point_3d".to_string()),
+            "DrawCircle3D" => Some("draw_circle_3d".to_string()),
+            "DrawTriangle3D" => Some("draw_triangle_3d".to_string()),
+            "DrawTriangleStrip3D" => Some("draw_triangle_strip_3d".to_string()),
 
             x if x.contains("Vector") => {
                 let name = x.to_case(Case::Snake).replace("vector_", "vector");
@@ -310,20 +316,60 @@ fn main() -> anyhow::Result<()> {
     writeln!(contents, "#![allow(improper_ctypes)]")?;
     bindings.write(Box::new(&mut contents))?;
 
-    let text = std::str::from_utf8(&contents)?;
-    let field_regex = Regex::new(r"pub ([A-Za-z]+): (.*?),")?;
-    let contents = field_regex.replace_all(text, |caps: &regex::Captures| {
-        let field = caps.get(1).unwrap().as_str();
-        let ty = caps.get(2).unwrap().as_str();
+    let mut extra_derives = vec!["typed_builder::TypedBuilder"];
 
-        if field.contains("type") {
-            format!("pub r#type: {},", ty)
-        } else {
-            format!("pub {}: {},", field.to_case(Case::Snake), ty)
+    if USE_SERDE {
+        extra_derives.push("serde::Serialize");
+        extra_derives.push("serde::Deserialize");
+    }
+
+    let text = std::str::from_utf8(&contents)?;
+    let derive_regex =
+        RegexBuilder::new(r"^#\[derive\((?P<derives>.*?)\)]\s+pub struct (?P<struct>\w+)")
+            .dot_matches_new_line(true)
+            .multi_line(true)
+            .build()?;
+    let extra_derives = extra_derives.join(", ");
+    let captures = derive_regex.captures_iter(text);
+
+    let mut text = text.to_string();
+    for cap in captures {
+        let derives = cap.name("derives").unwrap().as_str();
+        let struct_name = cap.name("struct").unwrap().as_str();
+
+        if !derives.contains("Copy") {
+            continue;
         }
+
+        let replace = format!(
+            "#[derive({}, {})]\n pub struct {}",
+            derives, extra_derives, struct_name
+        );
+        text = text.replace(cap.get(0).unwrap().as_str(), &replace);
+    }
+
+    let field_regex = RegexBuilder::new(r"(^|\s+)(?P<ident>[a-z][a-zA-Z0-9_]*)\s*:\s*(?P<type>(\*\s*(mut|const)\s*)*([\w;\[\]\s]|::)+)(\s+|,|$)").dot_matches_new_line(true).multi_line(true).build()?;
+    let num_regex = RegexBuilder::new(r"_+(?P<num>\d+)").build()?;
+    let text = field_regex.replace_all(&text, |caps: &Captures| {
+        let ident = caps.name("ident").unwrap().as_str().to_case(Case::Snake);
+        let ident = num_regex
+            .replace_all(&ident, |caps: &Captures| {
+                eprintln!("{:#?}", caps);
+                let num = caps.name("num").unwrap().as_str();
+                num.to_string()
+            })
+            .into_owned();
+        let ident = match ident.as_str() {
+            "box" => "r#box",
+            "type" => "r#type",
+
+            x => x,
+        };
+        let ty = caps.name("type").unwrap().as_str();
+        format!(" {}: {},", ident, ty)
     });
 
-    file.write_all(contents.as_bytes())?;
+    file.write_all(text.as_bytes())?;
     file.flush()?;
     std::mem::forget(file);
 

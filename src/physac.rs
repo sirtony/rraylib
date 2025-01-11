@@ -3,13 +3,148 @@
 use crate::graphics::Shape2D;
 use crate::sys::*;
 pub use crate::sys::{
-    PhysicsShape, CIRCLE_VERTICES, COLLISION_ITERATIONS, MAX_BODIES, MAX_MANIFOLDS, MAX_VERTICES,
+    CIRCLE_VERTICES, COLLISION_ITERATIONS, MAX_BODIES, MAX_MANIFOLDS, MAX_VERTICES,
     PENETRATION_ALLOWANCE, PENETRATION_CORRECTION,
 };
-use crate::{guarded, newtype};
+use crate::{getter, guarded, newtype, property};
+use std::ops::*;
 use std::sync::MutexGuard;
 
-newtype!(PhysicsBody, destroy_physics_body);
+impl Mat2 {
+    pub const IDENTITY: Self = Self {
+        m00: 1.0,
+        m01: 0.0,
+        m10: 0.0,
+        m11: 1.0,
+    };
+
+    pub fn addf(&mut self, rhs: f32) {
+        self.m00 += rhs;
+        self.m01 += rhs;
+        self.m10 += rhs;
+        self.m11 += rhs;
+    }
+
+    pub fn subf(&mut self, rhs: f32) {
+        self.m00 -= rhs;
+        self.m01 -= rhs;
+        self.m10 -= rhs;
+        self.m11 -= rhs;
+    }
+
+    pub fn mulf(&mut self, rhs: f32) {
+        self.m00 *= rhs;
+        self.m01 *= rhs;
+        self.m10 *= rhs;
+        self.m11 *= rhs;
+    }
+}
+
+impl<T: Into<Vector4>> From<T> for Mat2 {
+    fn from(v: T) -> Self {
+        let v = v.into();
+        Mat2 {
+            m00: v.x,
+            m01: v.y,
+            m10: v.z,
+            m11: v.w,
+        }
+    }
+}
+
+impl Add for Mat2 {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Mat2 {
+            m00: self.m00 + rhs.m00,
+            m01: self.m01 + rhs.m01,
+            m10: self.m10 + rhs.m10,
+            m11: self.m11 + rhs.m11,
+        }
+    }
+}
+
+impl AddAssign for Mat2 {
+    fn add_assign(&mut self, rhs: Self) {
+        *self = *self + rhs;
+    }
+}
+
+impl Sub for Mat2 {
+    type Output = Self;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        Mat2 {
+            m00: self.m00 - rhs.m00,
+            m01: self.m01 - rhs.m01,
+            m10: self.m10 - rhs.m10,
+            m11: self.m11 - rhs.m11,
+        }
+    }
+}
+
+impl SubAssign for Mat2 {
+    fn sub_assign(&mut self, rhs: Self) {
+        *self = *self - rhs;
+    }
+}
+
+impl Mul for Mat2 {
+    type Output = Self;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        Mat2 {
+            m00: self.m00 * rhs.m00 + self.m01 * rhs.m10,
+            m01: self.m00 * rhs.m01 + self.m01 * rhs.m11,
+            m10: self.m10 * rhs.m00 + self.m11 * rhs.m10,
+            m11: self.m10 * rhs.m01 + self.m11 * rhs.m11,
+        }
+    }
+}
+
+impl MulAssign for Mat2 {
+    fn mul_assign(&mut self, rhs: Self) {
+        *self = *self * rhs;
+    }
+}
+
+newtype!(PolygonData);
+
+impl PolygonData {
+    getter!(vertex_count: u32);
+
+    pub fn positions(&self) -> [Vector2; 24] {
+        let data = unsafe { self.as_raw() };
+        data.positions
+    }
+
+    pub fn normals(&self) -> [Vector2; 24] {
+        let data = unsafe { self.as_raw() };
+        data.normals
+    }
+}
+
+newtype!(PhysicsShape);
+
+impl PhysicsShape {
+    getter!(r#type[shape_type]: u32);
+    property!(radius: f32);
+    property!(transform: Mat2);
+
+    pub fn body(&self) -> PhysicsBody {
+        let ptr = unsafe { self.as_ptr() };
+        PhysicsBody::unowned(unsafe { (*ptr).body })
+    }
+
+    pub fn vertices(&self) -> PolygonData {
+        let ptr = unsafe { self.as_ptr() };
+        let data = unsafe { (*ptr).vertex_data };
+        PolygonData::unowned(data)
+    }
+}
+
+newtype!(PhysicsBody, @destroy_physics_body);
 
 impl PhysicsBody {
     pub fn add_force(&mut self, force: impl Into<Vector2>) {
@@ -37,7 +172,7 @@ impl PhysicsBody {
         Some(unsafe { std::mem::transmute(shape) })
     }
 
-    pub fn get_shape(&self) -> Option<Shape2D> {
+    pub fn get_shape2d(&self) -> Option<Shape2D> {
         let verts = self.vertices();
         match verts.as_slice() {
             [] => None,
@@ -113,191 +248,31 @@ impl PhysicsBody {
         }
     }
 
-    pub fn id(&self) -> u32 {
-        unsafe { (*self.as_raw()).id }
-    }
+    getter!(*id: u32);
+    property!(*enabled: bool);
+    getter!(*position: Vector2);
+    getter!(*velocity: Vector2);
+    getter!(*force: Vector2);
+    getter!(*angular_velocity: f32);
+    getter!(*torque: f32);
+    getter!(*orient[rotation]: f32);
+    getter!(*inertia: f32);
+    getter!(*inverse_inertia: f32);
+    getter!(*mass: f32);
+    getter!(*inverse_mass: f32);
+    getter!(*static_friction: f32);
+    getter!(*dynamic_friction: f32);
+    getter!(*restitution: f32);
+    property!(*use_gravity: bool);
+    property!(*is_grounded: bool);
+    property!(*freeze_orient[lock_rotation]: bool);
 
-    pub fn enabled(&self) -> bool {
-        unsafe { (*self.as_raw()).enabled }
-    }
-
-    pub fn set_enabled(&mut self, enabled: bool) {
-        unsafe {
-            let ptr = self.as_raw();
-            (*ptr).enabled = enabled;
-        }
-    }
-
-    pub fn position(&self) -> Vector2 {
-        unsafe { (*self.as_raw()).position }
-    }
-
-    pub fn set_position(&mut self, position: impl Into<Vector2>) {
-        let position = position.into();
-        unsafe {
-            let ptr = self.as_raw();
-            (*ptr).position = position;
-        }
-    }
-
-    pub fn velocity(&self) -> Vector2 {
-        unsafe { (*self.as_raw()).velocity }
-    }
-
-    pub fn set_velocity(&mut self, velocity: impl Into<Vector2>) {
-        let velocity = velocity.into();
-        unsafe {
-            let ptr = self.as_raw();
-            (*ptr).velocity = velocity;
-        }
-    }
-
-    pub fn force(&self) -> Vector2 {
-        unsafe { (*self.as_raw()).force }
-    }
-
-    pub fn set_force(&mut self, force: impl Into<Vector2>) {
-        let force = force.into();
-        unsafe {
-            let ptr = self.as_raw();
-            (*ptr).force = force;
-        }
-    }
-
-    pub fn angular_velocity(&self) -> f32 {
-        unsafe { (*self.as_raw()).angular_velocity }
-    }
-
-    pub fn set_angular_velocity(&mut self, angular_velocity: f32) {
-        unsafe {
-            let ptr = self.as_raw();
-            (*ptr).angular_velocity = angular_velocity;
-        }
-    }
-
-    pub fn torque(&self) -> f32 {
-        unsafe { (*self.as_raw()).torque }
-    }
-
-    pub fn set_torque(&mut self, torque: f32) {
-        unsafe {
-            let ptr = self.as_raw();
-            (*ptr).torque = torque;
-        }
-    }
-
-    pub fn rotation(&self) -> f32 {
-        unsafe { (*self.as_raw()).orient }
-    }
-
-    pub fn static_friction(&self) -> f32 {
-        unsafe { (*self.as_raw()).static_friction }
-    }
-
-    pub fn set_static_friction(&mut self, static_friction: f32) {
-        unsafe {
-            let ptr = self.as_raw();
-            (*ptr).static_friction = static_friction;
-        }
-    }
-
-    pub fn dynamic_friction(&self) -> f32 {
-        unsafe { (*self.as_raw()).dynamic_friction }
-    }
-
-    pub fn set_dynamic_friction(&mut self, dynamic_friction: f32) {
-        unsafe {
-            let ptr = self.as_raw();
-            (*ptr).dynamic_friction = dynamic_friction;
-        }
-    }
-
-    pub fn restitution(&self) -> f32 {
-        unsafe { (*self.as_raw()).restitution }
-    }
-
-    pub fn set_restitution(&mut self, restitution: f32) {
-        unsafe {
-            let ptr = self.as_raw();
-            (*ptr).restitution = restitution;
-        }
-    }
-
-    pub fn gravity(&self) -> bool {
-        unsafe { (*self.as_raw()).use_gravity }
-    }
-
-    pub fn set_gravity(&mut self, gravity: bool) {
-        unsafe {
-            let ptr = self.as_raw();
-            (*ptr).use_gravity = gravity;
-        }
-    }
-
-    pub fn grounded(&self) -> bool {
-        unsafe { (*self.as_raw()).is_grounded }
-    }
-
-    pub fn set_grounded(&mut self, is_grounded: bool) {
-        unsafe {
-            let ptr = self.as_raw();
-            (*ptr).is_grounded = is_grounded;
-        }
-    }
-
-    pub fn allow_rotation(&self) -> bool {
-        unsafe { (*self.as_raw()).freeze_orient }
-    }
-
-    pub fn set_allow_rotation(&mut self, freeze_orient: bool) {
-        unsafe {
-            let ptr = self.as_raw();
-            (*ptr).freeze_orient = freeze_orient;
-        }
-    }
-
-    pub fn mass(&self) -> f32 {
-        unsafe { (*self.as_raw()).mass }
-    }
-
-    pub fn set_mass(&mut self, mass: f32) {
-        unsafe {
-            let ptr = self.as_raw();
-            (*ptr).mass = mass;
-        }
-    }
-
-    pub fn inertia(&self) -> f32 {
-        unsafe { (*self.as_raw()).inertia }
-    }
-
-    pub fn set_inertia(&mut self, inertia: f32) {
-        unsafe {
-            let ptr = self.as_raw();
-            (*ptr).inertia = inertia;
-        }
-    }
-
-    pub fn inverse_mass(&self) -> f32 {
-        unsafe { (*self.as_raw()).inverse_mass }
-    }
-
-    pub fn set_inverse_mass(&mut self, inverse_mass: f32) {
-        unsafe {
-            let ptr = self.as_raw();
-            (*ptr).inverse_mass = inverse_mass;
-        }
-    }
-
-    pub fn inverse_inertia(&self) -> f32 {
-        unsafe { (*self.as_raw()).inverse_inertia }
-    }
-
-    pub fn set_inverse_inertia(&mut self, inverse_inertia: f32) {
-        unsafe {
-            let ptr = self.as_raw();
-            (*ptr).inverse_inertia = inverse_inertia;
-        }
+    pub fn physics_shape(&self) -> PhysicsShape {
+        let shape = unsafe { self.as_ptr() };
+        let shape = unsafe { shape.read() };
+        let shape = unsafe { &(*shape).shape } as *const crate::sys::PhysicsShape;
+        let shape = unsafe { shape.read() };
+        PhysicsShape::unowned(shape)
     }
 
     pub fn count() -> usize {
@@ -308,8 +283,37 @@ impl PhysicsBody {
         let count = Self::count();
         (0..count)
             .map(|x| unsafe { get_physics_body(x as i32) })
-            .map(From::from)
+            .map(PhysicsBody::unowned)
             .collect()
+    }
+}
+
+newtype!(PhysicsManifold);
+
+impl PhysicsManifold {
+    getter!(*id: u32);
+    getter!(*penetration: f32);
+    getter!(*normal: Vector2);
+    getter!(*contacts_count: u32);
+    getter!(*restitution: f32);
+    getter!(*dynamic_friction: f32);
+    getter!(*static_friction: f32);
+
+    pub fn contacts(&self) -> &[Vector2] {
+        let data = unsafe { self.as_raw() };
+        unsafe { (*data).contacts.as_slice() }
+    }
+
+    pub fn body_a(&self) -> PhysicsBody {
+        let data = unsafe { self.as_raw() };
+        let body = unsafe { (*data).body_a };
+        PhysicsBody::unowned(body)
+    }
+
+    pub fn body_b(&self) -> PhysicsBody {
+        let data = unsafe { self.as_raw() };
+        let body = unsafe { (*data).body_b };
+        PhysicsBody::unowned(body)
     }
 }
 
@@ -348,7 +352,9 @@ impl<'a> Physics<'a> {
             Err(crate::Error::TooManyPhysicsBodies)
         } else {
             let position = position.into();
-            Ok(unsafe { create_physics_body_circle(position, radius, density) }.into())
+            Ok(PhysicsBody::owned(unsafe {
+                create_physics_body_circle(position, radius, density)
+            }))
         }
     }
 
@@ -362,10 +368,9 @@ impl<'a> Physics<'a> {
         } else {
             let rc = rc.into();
             let (width, height) = rc.size().into();
-            Ok(
-                unsafe { create_physics_body_rectangle(rc.position(), width, height, density) }
-                    .into(),
-            )
+            Ok(PhysicsBody::owned(unsafe {
+                create_physics_body_rectangle(rc.position(), width, height, density)
+            }))
         }
     }
 
@@ -379,10 +384,9 @@ impl<'a> Physics<'a> {
         if PhysicsBody::count() >= MAX_BODIES as usize {
             Err(crate::Error::TooManyPhysicsBodies)
         } else {
-            Ok(
-                unsafe { create_physics_body_polygon(pos.into(), radius, sides as i32, density) }
-                    .into(),
-            )
+            Ok(PhysicsBody::owned(unsafe {
+                create_physics_body_polygon(pos.into(), radius, sides as i32, density)
+            }))
         }
     }
 }

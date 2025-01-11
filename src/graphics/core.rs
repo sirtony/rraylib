@@ -1,6 +1,6 @@
 use crate::graphics::{Drawables2D, Shape2D, Texture};
 use crate::sys::*;
-use crate::{guarded, newtype, try_lock, Error, Result};
+use crate::{getter, guarded, newtype, try_lock, Error, Result};
 use std::ffi::{c_void, CString};
 use std::fs::File;
 use std::hash::{Hash, Hasher};
@@ -13,7 +13,7 @@ use std::sync::MutexGuard;
 pub struct Kernel<const N: usize>([f32; N]);
 
 impl<const N: usize> Kernel<N> {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self([0.0; N])
     }
 
@@ -118,16 +118,84 @@ pub enum Scaling {
     NearestNeighbor,
 }
 
+#[repr(u32)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum Packing {
+    Default = 0,
+    Skyline = 1,
+}
+
+impl Default for Packing {
+    fn default() -> Self {
+        Self::Default
+    }
+}
+
 impl Default for Scaling {
     fn default() -> Self {
         Self::Bicubic
     }
 }
 
-newtype!(Font, unload_font);
-newtype!(Shader, unload_shader);
+newtype!(GlyphInfo);
+impl GlyphInfo {
+    getter!(value: i32);
+    getter!(offset_x: i32);
+    getter!(offset_y: i32);
+    getter!(advance_x: i32);
 
+    pub fn image(&self) -> Image {
+        let ptr = unsafe { self.as_raw() };
+        Image::unowned(ptr.image, None)
+    }
+}
+
+newtype!(Shader, @unload_shader);
+
+newtype!(Font, @unload_font);
 impl Font {
+    getter!(base_size: i32 );
+    getter!(glyph_count: u32);
+    getter!(glyph_padding: i32);
+
+    pub fn texture(&self) -> Texture {
+        let tex = unsafe { self.as_raw() };
+        Texture::unowned(tex.texture)
+    }
+
+    pub fn glyph_rectangles(&self) -> &[Rectangle] {
+        let ptr = unsafe { self.as_raw() };
+        unsafe { std::slice::from_raw_parts(ptr.recs, ptr.glyph_count as usize) }
+    }
+
+    pub fn glyphs(&self) -> Vec<GlyphInfo> {
+        let ptr = unsafe { self.as_raw() };
+        let mut vec = Vec::with_capacity(ptr.glyph_count as usize);
+
+        for i in 0..ptr.glyph_count {
+            let glyph = unsafe { ptr.glyphs.add(i as usize).read() };
+            vec.push(GlyphInfo::unowned(glyph));
+        }
+
+        vec
+    }
+
+    pub fn get_atlas(&self, font_size: u32, padding: i32, pack_method: Packing) -> Image {
+        let mut ptr = unsafe { self.as_raw() };
+        let img = unsafe {
+            gen_image_font_atlas(
+                ptr.glyphs,
+                addr_of_mut!(ptr.recs),
+                ptr.glyph_count,
+                font_size as i32,
+                padding,
+                pack_method as i32,
+            )
+        };
+
+        Image::owned(img, None)
+    }
+
     pub fn from_file(file_name: impl AsRef<Path>) -> Result<Self> {
         let file_name = file_name.as_ref().as_os_str().as_encoded_bytes();
         let file_name = CString::new(file_name)?;
@@ -150,7 +218,7 @@ impl Font {
     }
 
     pub fn glyph(&self, codepoint: i32) -> GlyphInfo {
-        unsafe { get_glyph_info(self.as_raw(), codepoint) }
+        GlyphInfo::unowned(unsafe { get_glyph_info(self.as_raw(), codepoint) })
     }
 
     pub fn glyph_index(&self, codepoint: i32) -> i32 {
@@ -169,10 +237,11 @@ impl Default for Font {
     }
 }
 
-pub struct Image {
-    img: crate::sys::Image,
+newtype!(
+    Image,
     frames: Option<u32>,
-}
+    @unload_image
+);
 
 impl Image {
     pub fn from_file(file_name: impl AsRef<Path>) -> Result<Self> {
@@ -185,7 +254,7 @@ impl Image {
             return Err(Error::UnableToLoad("image"));
         }
 
-        Ok(Self { img, frames: None })
+        Ok(Self::owned(img, None))
     }
 
     pub fn from_animated_file(file_name: impl AsRef<Path>) -> Result<Self> {
@@ -199,16 +268,13 @@ impl Image {
             return Err(Error::UnableToLoad("image"));
         }
 
-        Ok(Self {
-            img,
-            frames: Some(frames as u32),
-        })
+        Ok(Self::owned(img, Some(frames as u32)))
     }
 
     pub fn from_color(width: u32, height: u32, color: impl Into<Color>) -> Self {
         let color = color.into();
         let img = unsafe { gen_image_color(width as i32, height as i32, color) };
-        Self { img, frames: None }
+        Self::owned(img, None)
     }
 
     pub fn from_linear_gradient(
@@ -229,7 +295,7 @@ impl Image {
                 end_color,
             )
         };
-        Self { img, frames: None }
+        Self::owned(img, None)
     }
 
     pub fn from_radial_gradient(
@@ -250,7 +316,7 @@ impl Image {
                 outer_color,
             )
         };
-        Self { img, frames: None }
+        Self::owned(img, None)
     }
 
     pub fn from_square_gradient(
@@ -271,7 +337,7 @@ impl Image {
                 outer_color,
             )
         };
-        Self { img, frames: None }
+        Self::owned(img, None)
     }
 
     pub fn from_checker_pattern(
@@ -294,12 +360,12 @@ impl Image {
                 col2,
             )
         };
-        Self { img, frames: None }
+        Self::owned(img, None)
     }
 
     pub fn from_white_noise(width: u32, height: u32, factor: f32) -> Self {
         let img = unsafe { gen_image_white_noise(width as i32, height as i32, factor) };
-        Self { img, frames: None }
+        Self::owned(img, None)
     }
 
     pub fn from_perlin_noise(
@@ -312,19 +378,19 @@ impl Image {
         let img = unsafe {
             gen_image_perlin_noise(width as i32, height as i32, offset_x, offset_y, scale)
         };
-        Self { img, frames: None }
+        Self::owned(img, None)
     }
 
     pub fn from_cellular(width: u32, height: u32, tile_size: i32) -> Self {
         let img = unsafe { gen_image_cellular(width as i32, height as i32, tile_size) };
-        Self { img, frames: None }
+        Self::owned(img, None)
     }
 
     pub fn with_text(width: u32, height: u32, text: impl AsRef<str>) -> Result<Self> {
         let text = text.as_ref().as_bytes();
         let text = CString::new(text)?;
         let img = unsafe { gen_image_text(width as i32, height as i32, text.as_ptr()) };
-        Ok(Self { img, frames: None })
+        Ok(Self::owned(img, None))
     }
 
     pub fn from_text(
@@ -336,7 +402,7 @@ impl Image {
         let text = CString::new(text)?;
         let color = color.into();
         let img = unsafe { image_text(text.as_ptr(), font_size as i32, color) };
-        Ok(Self { img, frames: None })
+        Ok(Self::owned(img, None))
     }
 
     pub fn from_text_ex(
@@ -350,7 +416,7 @@ impl Image {
         let text = CString::new(text)?;
         let tint = tint.into();
         let img = unsafe { image_text_ex(font.as_raw(), text.as_ptr(), font_size, spacing, tint) };
-        Ok(Self { img, frames: None })
+        Ok(Self::owned(img, None))
     }
 
     pub fn from_screen() -> Result<Self> {
@@ -359,7 +425,7 @@ impl Image {
         if !unsafe { is_image_valid(ptr.read()) } {
             Err(Error::UnableToLoad("image"))
         } else {
-            Ok(Self { img, frames: None })
+            Ok(Self::owned(img, None))
         }
     }
 
@@ -379,67 +445,61 @@ impl Image {
     pub fn clone_from(&self, rc: impl Into<Rectangle>) -> Self {
         let rc = rc.into();
         let img = unsafe { image_from_image(self.as_raw(), rc) };
-        Self {
-            img,
-            frames: self.frames,
-        }
+        Self::owned(img, self.frames)
     }
 
     pub fn clone_channel(&self, channel: u32) -> Self {
         let img = unsafe { image_from_channel(self.as_raw(), channel as i32) };
-        Self {
-            img,
-            frames: self.frames,
-        }
+        Self::owned(img, self.frames)
     }
 
     pub fn change_format(&mut self, format: PixelFormat) {
-        let ptr = addr_of_mut!(self.img);
+        let ptr = addr_of_mut!(self.inner);
         unsafe { image_format(ptr, format as i32) }
     }
 
     pub fn convert_to_power_of_two(&mut self, fill: impl Into<Color>) {
-        let ptr = addr_of_mut!(self.img);
+        let ptr = addr_of_mut!(self.inner);
         unsafe { image_to_pot(ptr, fill.into()) }
     }
 
     pub fn crop(&mut self, rect: impl Into<Rectangle>) {
-        let ptr = addr_of_mut!(self.img);
+        let ptr = addr_of_mut!(self.inner);
         unsafe { image_crop(ptr, rect.into()) }
     }
 
     pub fn alpha_crop(&mut self, threshold: f32) {
-        let ptr = addr_of_mut!(self.img);
+        let ptr = addr_of_mut!(self.inner);
         unsafe { image_alpha_crop(ptr, threshold) }
     }
 
     pub fn alpha_clear(&mut self, color: impl Into<Color>, threshold: f32) {
-        let ptr = addr_of_mut!(self.img);
+        let ptr = addr_of_mut!(self.inner);
         unsafe { image_alpha_clear(ptr, color.into(), threshold) }
     }
 
     pub fn alpha_mask(&mut self, alpha_mask: &Image) {
-        let ptr = addr_of_mut!(self.img);
+        let ptr = addr_of_mut!(self.inner);
         unsafe { image_alpha_mask(ptr, alpha_mask.as_raw()) }
     }
 
     pub fn premultiply_alpha(&mut self) {
-        let ptr = addr_of_mut!(self.img);
+        let ptr = addr_of_mut!(self.inner);
         unsafe { image_alpha_premultiply(ptr) }
     }
 
     pub fn gaussian_blur(&mut self, blur_size: i32) {
-        let ptr = addr_of_mut!(self.img);
+        let ptr = addr_of_mut!(self.inner);
         unsafe { image_blur_gaussian(ptr, blur_size) }
     }
 
     pub fn kernel_convolution<const N: usize>(&mut self, kernel: &Kernel<N>) {
-        let ptr = addr_of_mut!(self.img);
+        let ptr = addr_of_mut!(self.inner);
         unsafe { image_kernel_convolution(ptr, kernel.0.as_ptr(), kernel.len() as i32) }
     }
 
     pub fn resize(&mut self, new_size: impl Into<Vector2>, algorithm: Scaling) {
-        let ptr = addr_of_mut!(self.img);
+        let ptr = addr_of_mut!(self.inner);
         let new_size = new_size.into();
         let (w, h): (i32, i32) = new_size.into();
 
@@ -455,7 +515,7 @@ impl Image {
         offset: impl Into<Vector2>,
         fill: impl Into<Color>,
     ) {
-        let ptr = addr_of_mut!(self.img);
+        let ptr = addr_of_mut!(self.inner);
         let new_size = new_size.into();
         let (w, h): (i32, i32) = new_size.into();
         let offset = offset.into();
@@ -465,47 +525,47 @@ impl Image {
     }
 
     pub fn compute_mipmaps(&mut self) {
-        let ptr = addr_of_mut!(self.img);
+        let ptr = addr_of_mut!(self.inner);
         unsafe { image_mipmaps(ptr) }
     }
 
     pub fn dither(&mut self, r: i32, g: i32, b: i32, a: i32) {
-        let ptr = addr_of_mut!(self.img);
+        let ptr = addr_of_mut!(self.inner);
         unsafe { image_dither(ptr, r, g, b, a) }
     }
 
     pub fn flip_vertical(&mut self) {
-        let ptr = addr_of_mut!(self.img);
+        let ptr = addr_of_mut!(self.inner);
         unsafe { image_flip_vertical(ptr) }
     }
 
     pub fn flip_horizontal(&mut self) {
-        let ptr = addr_of_mut!(self.img);
+        let ptr = addr_of_mut!(self.inner);
         unsafe { image_flip_horizontal(ptr) }
     }
 
     pub fn rotate_clockwise(&mut self) {
-        let ptr = addr_of_mut!(self.img);
+        let ptr = addr_of_mut!(self.inner);
         unsafe { image_rotate_cw(ptr) }
     }
 
     pub fn rotate_counter_clockwise(&mut self) {
-        let ptr = addr_of_mut!(self.img);
+        let ptr = addr_of_mut!(self.inner);
         unsafe { image_rotate_ccw(ptr) }
     }
 
     pub fn tint(&mut self, color: impl Into<Color>) {
-        let ptr = addr_of_mut!(self.img);
+        let ptr = addr_of_mut!(self.inner);
         unsafe { image_color_tint(ptr, color.into()) }
     }
 
     pub fn invert(&mut self) {
-        let ptr = addr_of_mut!(self.img);
+        let ptr = addr_of_mut!(self.inner);
         unsafe { image_color_invert(ptr) }
     }
 
     pub fn grayscale(&mut self) {
-        let ptr = addr_of_mut!(self.img);
+        let ptr = addr_of_mut!(self.inner);
         unsafe { image_color_grayscale(ptr) }
     }
 
@@ -514,17 +574,17 @@ impl Image {
     }
 
     pub fn contrast(&mut self, contrast: f32) {
-        let ptr = addr_of_mut!(self.img);
+        let ptr = addr_of_mut!(self.inner);
         unsafe { image_color_contrast(ptr, contrast.clamp(-100.0, 100.0)) }
     }
 
     pub fn brightness(&mut self, brightness: i32) {
-        let ptr = addr_of_mut!(self.img);
+        let ptr = addr_of_mut!(self.inner);
         unsafe { image_color_brightness(ptr, brightness.clamp(-255, 255)) }
     }
 
     pub fn replace_color(&mut self, color: impl Into<Color>, replace: impl Into<Color>) {
-        let ptr = addr_of_mut!(self.img);
+        let ptr = addr_of_mut!(self.inner);
         unsafe { image_color_replace(ptr, color.into(), replace.into()) }
     }
 
@@ -592,7 +652,7 @@ impl Image {
         dest_rect: impl Into<Rectangle>,
         tint: impl Into<Color>,
     ) {
-        let ptr = addr_of_mut!(self.img);
+        let ptr = addr_of_mut!(self.inner);
         unsafe {
             image_draw(
                 ptr,
@@ -603,34 +663,12 @@ impl Image {
             )
         }
     }
-
-    /**
-    Returns the raw pointer to the underlying raylib type.
-    # Safety
-    This method is unsafe because it allows the caller to access the underlying pointer directly.
-
-    The caller must not free the pointer manually, allow the wrapper type to be dropped (resulting in a dangling pointer),
-    or use the pointer to perform interior mutability unless first ensuring that the pointer is not currently in use elsewhere.
-    */
-    pub unsafe fn as_raw(&self) -> crate::sys::Image {
-        let ptr = addr_of!(self.img);
-        ptr.read()
-    }
 }
 
 impl Clone for Image {
     fn clone(&self) -> Self {
         let img = unsafe { image_copy(self.as_raw()) };
-        Self {
-            img,
-            frames: self.frames,
-        }
-    }
-}
-
-impl Drop for Image {
-    fn drop(&mut self) {
-        unsafe { unload_image(self.as_raw()) }
+        Self::owned(img, self.frames)
     }
 }
 
@@ -641,7 +679,7 @@ impl Drawables2D for Image {
         color: impl Into<Color>,
     ) -> Result<()> {
         let color = color.into();
-        let img_ptr = addr_of_mut!(self.img);
+        let img_ptr = addr_of_mut!(self.inner);
 
         match shape.into() {
             Shape2D::Pixel(p) => {
@@ -747,7 +785,7 @@ impl Drawables2D for Image {
     ) -> Result<()> {
         let line_thickness = line_thickness.unwrap_or(1.0);
         let color = color.into();
-        let img_ptr = addr_of_mut!(self.img);
+        let img_ptr = addr_of_mut!(self.inner);
         match shape.into() {
             Shape2D::Pixel(p) => {
                 unsafe { image_draw_pixel(img_ptr, p.x as i32, p.y as i32, color) };
@@ -935,7 +973,7 @@ impl Drawables2D for Image {
         font_size: u32,
         color: impl Into<Color>,
     ) -> Result<()> {
-        let ptr = addr_of_mut!(self.img);
+        let ptr = addr_of_mut!(self.inner);
         let text = text.as_ref().as_bytes();
         let text = CString::new(text)?;
         let pos = pos.into();
@@ -954,7 +992,7 @@ impl Drawables2D for Image {
         spacing: f32,
         tint: impl Into<Color>,
     ) -> Result<()> {
-        let ptr = addr_of_mut!(self.img);
+        let ptr = addr_of_mut!(self.inner);
         let text = text.as_ref().as_bytes();
         let text = CString::new(text)?;
 
@@ -990,7 +1028,7 @@ impl Drawables2D for Image {
     }
 
     fn clear_background(&mut self, color: impl Into<Color>) {
-        let ptr = addr_of_mut!(self.img);
+        let ptr = addr_of_mut!(self.inner);
         unsafe { image_clear_background(ptr, color.into()) }
     }
 }

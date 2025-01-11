@@ -41,7 +41,7 @@ impl AutomationPlayback<'_> {
 
 crate::utils::newtype!(
     AutomationEventList as Automation,
-    unload_automation_event_list
+    @unload_automation_event_list
 );
 
 impl Default for Automation {

@@ -25,26 +25,39 @@ pub use try_lock;
 
 #[macro_export]
 macro_rules! newtype {
-    ( $name: ident ) => {
-        $crate::utils::newtype!($name as $name);
+    ( $name: ident $(, $extra_field: ident: $field_type: ty )* ) => {
+        $crate::utils::newtype!($name as $name $(, $extra_field: $field_type )*);
     };
 
-    ( $name: ident as $alias: ident ) => {
+    ( $name: ident as $alias: ident $(, $extra_field: ident: $field_type: ty )* ) => {
+        #[allow(dead_code)]
         #[derive(Debug)]
         pub struct $alias {
             inner: $crate::sys::$name,
             owned: bool,
+            $(
+                $extra_field: $field_type
+            ),*
         }
 
         impl $alias {
-            pub fn owned(inner: $crate::sys::$name) -> Self {
-                Self { inner, owned: true }
+            pub fn owned(inner: $crate::sys::$name $(, $extra_field: $field_type )* ) -> Self {
+                Self {
+                    inner,
+                    owned: true,
+                    $(
+                        $extra_field
+                    ),*
+                }
             }
 
-            pub fn unowned(inner: $crate::sys::$name) -> Self {
+            pub fn unowned(inner: $crate::sys::$name $(, $extra_field: $field_type )* ) -> Self {
                 Self {
                     inner,
                     owned: false,
+                    $(
+                        $extra_field
+                    ),*
                 }
             }
 
@@ -87,20 +100,14 @@ macro_rules! newtype {
                 ptr as *mut _
             }
         }
-
-        impl From<$crate::sys::$name> for $alias {
-            fn from(inner: $crate::sys::$name) -> Self {
-                Self { inner, owned: true }
-            }
-        }
     };
 
-    ( $name: ident, $drop: ident ) => {
-        $crate::utils::newtype!($name as $name, $drop);
+    ( $name: ident $(, $extra_field: ident: $field_type: ty )*, @$drop: ident ) => {
+        $crate::utils::newtype!($name as $name $(, $extra_field: $field_type )*, @$drop);
     };
 
-    ( $name: ident as $alias: ident, $drop: ident ) => {
-        $crate::utils::newtype!($name as $alias);
+    ( $name: ident as $alias: ident $(, $extra_field: ident: $field_type: ty )* , @$drop: ident ) => {
+        $crate::utils::newtype!($name as $alias $(, $extra_field: $field_type )*);
 
         impl Drop for $alias {
             fn drop(&mut self) {
@@ -137,6 +144,7 @@ macro_rules! guarded {
     };
 
     ( base $tn: ident $( ,$name: ident )* ) => {
+        #[allow(dead_code)]
         pub struct $tn {
             $( $name: ::std::sync::Mutex<()> ),*
         }
@@ -159,3 +167,173 @@ macro_rules! guarded {
 
 #[allow(unused_imports)]
 pub use guarded;
+
+#[macro_export]
+macro_rules! getter {
+    ( $name: ident: $rtype: ty ) => {
+        $crate::utils::getter!($name: $rtype as $rtype);
+    };
+
+
+    ( $name: ident: $rtype: ty as $ctype: ty ) => {
+        pub fn $name(&self) -> $rtype {
+            unsafe {
+                let ptr = self.as_ptr();
+                (*ptr).$name as $rtype
+            }
+        }
+    };
+
+    ( * $name: ident: $rtype: ty ) => {
+        $crate::utils::getter!(*$name: $rtype as $rtype);
+    };
+
+    ( * $name: ident: $rtype: ty as $ctype: ty ) => {
+        pub fn $name(&self) -> $rtype {
+            unsafe {
+                let ptr = self.as_raw();
+                (*ptr).$name as $rtype
+            }
+        }
+    };
+
+    ( $name: ident[$alias: ident]: $rtype: ty ) => {
+        $crate::utils::getter!($name[$alias]: $rtype as $rtype);
+    };
+
+
+    ( $name: ident[$alias: ident]: $rtype: ty as $ctype: ty ) => {
+        pub fn $alias(&self) -> $rtype {
+            unsafe {
+                let ptr = self.as_ptr();
+                (*ptr).$name as $rtype
+            }
+        }
+    };
+
+    ( * $name: ident[$alias: ident]: $rtype: ty ) => {
+        $crate::utils::getter!(*$name[$alias]: $rtype as $rtype);
+    };
+
+    ( * $name: ident[$alias: ident]: $rtype: ty as $ctype: ty ) => {
+        pub fn $alias(&self) -> $rtype {
+            unsafe {
+                let ptr = self.as_raw();
+                (*ptr).$name as $rtype
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! setter {
+    ( $name: ident: $rtype: ty ) => {
+        $crate::utils::setter!($name: $rtype as $rtype);
+    };
+
+
+    ( $name: ident: $rtype: ty as $ctype: ty ) => {
+        paste::paste! {
+            pub fn [<set_ $name>](&mut self, value: $rtype) {
+                unsafe {
+                    let ptr = self.as_mut_ptr();
+                    (*ptr).$name = value as $ctype;
+                }
+            }
+        }
+    };
+
+    ( * $name: ident: $rtype: ty ) => {
+        $crate::utils::setter!(*$name: $rtype as $rtype);
+    };
+
+    ( * $name: ident: $rtype: ty as $ctype: ty ) => {
+        paste::paste! {
+            pub fn [<set_ $name>](&mut self, value: $rtype ) {
+                unsafe {
+                    let ptr = self.as_raw();
+                    (*ptr).$name = value as $ctype;
+                }
+            }
+        }
+    };
+
+    ( $name: ident[$alias: ident]: $rtype: ty ) => {
+        $crate::utils::setter!($name[$alias]: $rtype as $rtype);
+    };
+
+
+    ( $name: ident[$alias: ident]: $rtype: ty as $ctype: ty ) => {
+        paste::paste! {
+            pub fn [<set_ $alias>](&mut self, value: $rtype) {
+                unsafe {
+                    let ptr = self.as_mut_ptr();
+                    (*ptr).$name = value as $ctype;
+                }
+            }
+        }
+    };
+
+    ( * $name: ident[$alias: ident]: $rtype: ty ) => {
+        $crate::utils::setter!(*$name[$alias]: $rtype);
+    };
+
+    ( * $name: ident[$alias: ident]: $rtype: ty as $ctype: ty ) => {
+        paste::paste! {
+            pub fn [<set_ $alias>](&mut self, value: $rtype ) {
+                unsafe {
+                    let ptr = self.as_raw();
+                    (*ptr).$name = value as $ctype;
+                }
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! property {
+    ( $name: ident: $rtype: ty ) => {
+        $crate::utils::property!($name: $rtype as $rtype);
+    };
+
+
+    ( $name: ident: $rtype: ty as $ctype: ty ) => {
+        $crate::utils::getter!($name: $rtype as $ctype);
+        $crate::utils::setter!($name: $rtype as $ctype);
+    };
+
+    ( * $name: ident: $rtype: ty ) => {
+        $crate::utils::property!(*$name: $rtype as $rtype);
+    };
+
+    ( * $name: ident: $rtype: ty as $ctype: ty ) => {
+        $crate::utils::getter!(*$name: $rtype as $ctype);
+        $crate::utils::setter!(*$name: $rtype as $ctype);
+    };
+
+    ( $name: ident[$alias: ident]: $rtype: ty ) => {
+        $crate::utils::property!($name[$alias]: $rtype as $rtype);
+    };
+
+
+    ( $name: ident[$alias: ident]: $rtype: ty as $ctype: ty ) => {
+        $crate::utils::getter!($name[$alias]: $rtype as $ctype);
+        $crate::utils::setter!($name[$alias]: $rtype as $ctype);
+    };
+
+    ( * $name: ident[$alias: ident]: $rtype: ty ) => {
+        $crate::utils::property!(*$name[$alias]: $rtype as $rtype);
+    };
+
+    ( * $name: ident[$alias: ident]: $rtype: ty as $ctype: ty ) => {
+        $crate::utils::getter!(*$name[$alias]: $rtype as $ctype);
+        $crate::utils::setter!(*$name[$alias]: $rtype as $ctype);
+    };
+}
+
+#[allow(unused_imports)]
+pub use getter;
+#[allow(unused_imports)]
+pub use property;
+#[allow(unused_imports)]
+pub use setter;
