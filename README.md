@@ -8,15 +8,11 @@ Provides an all-in-one solution for using raylib in Rust in a way that is both s
 | [raymath](https://github.com/raysan5/raylib/releases/tag/5.5)    | v5.5    | Provides a set of advanced math functions.               |
 | [rlgl](https://github.com/raysan5/raylib/releases/tag/5.5)       | v5.5    | Provides an abstraction layer for OpenGL.                |
 | [raygui](https://github.com/raysan5/raygui/releases/tag/4.0)     | v4.0    | Provides a set of simple GUI elements.                   |
-| [Physac](https://github.com/victorfisac/Physac/releases/tag/1.1) | v1.1    | Provides a 2D physics engine for raylib.                 |
+| [Physac](https://github.com/victorfisac/Physac/releases/tag/1.1) | v1.1    | Provides a basic 2D physics engine.                      |
 
 ## Unsafe Bindings
 
 Unsafe bindings are provided by the `sys` module in this crate, and you may use raylib as you would in C if you prefer.
-
-The build script renames the automatically generated bindings to be more idiomatic, so all functions, structs, enums, and constants are renamed to follow Rust's naming conventions.
-
-The `ConfigFlags` struct was also renamed to `WindowFlags` to be more clear about its purpose.
 
 ## Motivation
 
@@ -30,7 +26,7 @@ MacOS should work, but it is not officially supported and will not be fixed if o
 
 This crate does not provide compilation support for Android, Web, or Raspberry Pi and there are no plans to change that.
 
-Pull requests are welcome for any of the above.
+Pull requests are welcome for any of the above, or any other issue.
 
 ## Features
 
@@ -48,27 +44,3 @@ Pull requests are welcome for any of the above.
 | `physac`        | Enables Physac support.                                         |
 | `sdl`           | Enables the SDL backend.                                        |
 | `external_glfw` | Use the system GLFW lib instead of the one bundled with raylib. |
-
-## Basic Usage
-
-```rust
-use rraylib::InitOptions;
-use rraylib::graphics::Color;
-
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let options = InitOptions::default();
-    let mut rl = rraylib::init(options)?;
-    let mut window = rl.window()?;
-
-    while !window.should_close() {
-        let mut ctx = rl.begin_drawing()?;
-
-        ctx.clear_background(Color::RAY_WHITE);
-        ctx.draw_fps(10, 10);
-    }
-
-    window.close()?;
-
-    Ok(())
-}
-```
