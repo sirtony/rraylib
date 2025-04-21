@@ -2,25 +2,21 @@
 name = "rraylib"
 version = "0.1.0"
 edition = "2021"
+build = "./build/main.rs"
 
 [dependencies]
-paste = "1.0.15"
-serde = { version = "1.0.217", features = ["derive"], optional = true }
-thiserror = "2.0.9"
-typed-builder = "0.20.0"
 
 [build-dependencies]
-anyhow = "1.0.95"
+anyhow = "1.0.98"
 bindgen = "0.71.1"
-cc = "1.2.6"
-cmake = "0.1.52"
-convert_case = "0.6.0"
-regex = "1.11.1"
-reqwest = { version = "0.12.12", features = ["blocking"] }
-zip-extract = "0.2.1"
+cc = "1.2.19"
+cmake = "0.1.54"
+tempfile = "3.19.1"
+zip-extract = "0.2.2"
+reqwest = { version = "0.12.15", features = ["blocking"] }
 
 [features]
-default = [ "opengl_33", "x11" ]
+default = [ "opengl_33" ]
 wayland = []
 x11 = []
 opengl_43 = []
@@ -33,4 +29,3 @@ external_glfw = []
 raygui = []
 physac = []
 sdl = []
-serde = ["dep:serde"]

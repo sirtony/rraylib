@@ -1,246 +1,163 @@
 extern crate alloc;
 
-use crate::error::{Error, Result};
-use std::ffi::{CStr, CString};
-use typed_builder::TypedBuilder;
-
-/// Monitor and Window handling.
-pub mod display;
-
-/// Drawing and rendering.
-pub mod graphics;
-
-/// Math functions and structures.
-pub mod math;
-
-/// Keyboard, mouse, gamepad, touch, and gestures input.
-pub mod input;
-
-/// Record and playback events.
-pub mod automation;
-
-/// Unsafe bindings to raylib, raymath, rlgl, raygui (if enabled), and Physac (if enabled).
+/// Unsafe bindings to raylib, raymath, rlgl, and raygui (if enabled)
 pub mod sys;
 
-pub(crate) mod utils;
+use crate::sys::Color;
 
-pub mod error;
-/// Provides a wrapper for raylib's logging functionality.
-pub mod log;
-
-/// Audio device and sound management.
-pub mod audio;
-
-/// 2D physics engine.
-#[cfg(feature = "physac")]
-pub mod physac;
-
-/// GUI controls and utilities.
-#[cfg(feature = "raygui")]
-pub mod gui;
-
-use crate::audio::AudioDevice;
-use crate::display::Window;
-use crate::graphics::Drawing;
-use crate::sys::*;
-
-#[derive(Debug, Clone, TypedBuilder)]
-pub struct Options {
-    #[builder(
-        setter( transform = | x: impl ToString | x.to_string() ),
-        default = format!(
-            "rraylib v{}.{}",
-            crate::sys::RAYLIB_VERSION_MAJOR,
-            crate::sys::RAYLIB_VERSION_MINOR
-        )
-        .to_string()
-    )]
-    pub title: String,
-    #[builder(default = 800)]
-    pub width: u32,
-    #[builder(default = 600)]
-    pub height: u32,
-    #[builder(default = false)]
-    pub msaa: bool,
-    #[builder(default = true)]
-    pub vsync: bool,
-    #[builder(default = false)]
-    pub borderless: bool,
-    #[builder(default = false)]
-    pub resizable: bool,
-    #[builder(default = true)]
-    pub decorated: bool,
-    #[builder(default = false)]
-    pub always_on_top: bool,
-    #[builder(default = false)]
-    pub fullscreen: bool,
-    #[builder(default = false)]
-    pub minimized: bool,
-    #[builder(default = false)]
-    pub maximized: bool,
-    #[builder(default = false)]
-    pub high_dpi: bool,
-    #[builder(setter(strip_option), default = None)]
-    pub target_fps: Option<u32>,
-    #[cfg_attr(debug_assertions, builder(default = LogLevel::Debug))]
-    #[cfg_attr(not(debug_assertions), builder(default = LogLevel::Warning))]
-    pub log_level: LogLevel,
-    #[builder(setter(strip_option), default = None)]
-    pub max_width: Option<u32>,
-    #[builder(setter(strip_option), default = None)]
-    pub max_height: Option<u32>,
-}
-
-impl Default for Options {
-    fn default() -> Self {
-        Self::builder().build()
-    }
-}
-
-guarded!(base Context, window, drawing, audio, physics, gui);
-
-impl Context {
-    pub fn window(&self) -> Result<Window> {
-        if !unsafe { is_window_ready() } {
-            return Err(Error::SubsystemNotInitialized("window"));
-        }
-
-        let guard = try_lock!(self.window).ok_or(Error::ThreadAlreadyLocked("window"))?;
-        Ok(Window::new(guard))
-    }
-
-    pub fn audio(&self) -> Result<AudioDevice<'_>> {
-        let guard = try_lock!(self.audio).ok_or(Error::ThreadAlreadyLocked("audio"))?;
-        Ok(AudioDevice::get(guard))
-    }
-
-    #[cfg(feature = "physac")]
-    pub fn physics(&self) -> Result<physac::Physics<'_>> {
-        let guard = try_lock!(self.physics).ok_or(Error::ThreadAlreadyLocked("physics"))?;
-        Ok(physac::Physics::get(guard))
-    }
-
-    #[cfg(feature = "raygui")]
-    pub fn ui(&self) -> Result<gui::Ui<'_>> {
-        let guard = try_lock!(self.gui).ok_or(Error::ThreadAlreadyLocked("gui"))?;
-        unsafe {
-            gui_enable();
-            gui_unlock();
-        }
-        Ok(gui::Ui::new(guard))
-    }
-
-    pub fn begin_drawing(&self) -> Result<Drawing> {
-        let guard = try_lock!(self.drawing).ok_or(Error::ThreadAlreadyLocked("drawing"))?;
-        Ok(Drawing::new(guard))
-    }
-
-    pub fn exit_key(&mut self, key: Key) {
-        unsafe {
-            set_exit_key(key as i32);
-        }
-    }
-
-    /// Gets the time in milliseconds for the last frame drawn.
-    pub fn delta_time(&self) -> f32 {
-        unsafe { get_frame_time() * 1000.0 }
-    }
-
-    pub fn elapsed_time(&self) -> f64 {
-        unsafe { get_time() }
-    }
-
-    pub fn fps(&self) -> u32 {
-        unsafe { get_fps() as u32 }
-    }
-
-    pub fn clipboard_text(&self) -> Result<String> {
-        let text = unsafe { get_clipboard_text() };
-
-        if text.is_null() {
-            return Ok(String::new());
-        }
-
-        let text = unsafe { CStr::from_ptr(text) };
-        Ok(text.to_string_lossy().into_owned())
-    }
-
-    pub fn set_clipboard_text(&self, text: impl AsRef<str>) -> Result<()> {
-        let text = CString::new(text.as_ref())?;
-        unsafe {
-            set_clipboard_text(text.as_ptr());
-        }
-        Ok(())
-    }
-}
-
-pub fn init(options: Options) -> Result<Context> {
-    if unsafe { is_window_ready() } {
-        return Err(Error::SubsystemAlreadyInitialized("window"));
-    }
-
-    let title = CString::new(options.title.as_bytes())?;
-    let mut flags = Vec::new();
-
-    if options.msaa {
-        flags.push(WindowFlags::Msaa4X);
-    }
-
-    if options.vsync {
-        flags.push(WindowFlags::Vsync);
-    }
-
-    if options.borderless {
-        flags.push(WindowFlags::Borderless);
-    }
-
-    if options.resizable {
-        flags.push(WindowFlags::Resizable);
-    }
-
-    if !options.decorated {
-        flags.push(WindowFlags::Undecorated);
-    }
-
-    if options.always_on_top {
-        flags.push(WindowFlags::AlwaysRun);
-    }
-
-    if options.fullscreen {
-        flags.push(WindowFlags::Fullscreen);
-    }
-
-    if options.minimized {
-        flags.push(WindowFlags::Minimized);
-    }
-
-    if options.maximized {
-        flags.push(WindowFlags::Maximized);
-    }
-
-    if options.high_dpi {
-        flags.push(WindowFlags::HighDPI);
-    }
-
-    let flags = flags
-        .into_iter()
-        .map(move |x| x as u32)
-        .fold(0, |acc, x| acc | x);
-
-    unsafe {
-        set_trace_log_level(options.log_level as i32);
-        set_config_flags(flags);
-        init_window(options.width as i32, options.height as i32, title.as_ptr());
-
-        if let Some(fps) = options.target_fps {
-            set_target_fps(fps as i32);
-        }
-
-        set_window_max_size(
-            options.max_width.unwrap_or(u32::MAX) as i32,
-            options.max_height.unwrap_or(u32::MAX) as i32,
-        )
-    }
-
-    Ok(Context::new())
-}
+pub const LIGHTGRAY: Color = Color {
+    r: 200,
+    g: 200,
+    b: 200,
+    a: 255,
+};
+pub const GRAY: Color = Color {
+    r: 130,
+    g: 130,
+    b: 130,
+    a: 255,
+};
+pub const DARKGRAY: Color = Color {
+    r: 80,
+    g: 80,
+    b: 80,
+    a: 255,
+};
+pub const YELLOW: Color = Color {
+    r: 253,
+    g: 249,
+    b: 0,
+    a: 255,
+};
+pub const GOLD: Color = Color {
+    r: 255,
+    g: 203,
+    b: 0,
+    a: 255,
+};
+pub const ORANGE: Color = Color {
+    r: 255,
+    g: 161,
+    b: 0,
+    a: 255,
+};
+pub const PINK: Color = Color {
+    r: 255,
+    g: 109,
+    b: 194,
+    a: 255,
+};
+pub const RED: Color = Color {
+    r: 230,
+    g: 41,
+    b: 55,
+    a: 255,
+};
+pub const MAROON: Color = Color {
+    r: 190,
+    g: 33,
+    b: 55,
+    a: 255,
+};
+pub const GREEN: Color = Color {
+    r: 0,
+    g: 228,
+    b: 48,
+    a: 255,
+};
+pub const LIME: Color = Color {
+    r: 0,
+    g: 158,
+    b: 47,
+    a: 255,
+};
+pub const DARKGREEN: Color = Color {
+    r: 0,
+    g: 117,
+    b: 44,
+    a: 255,
+};
+pub const SKYBLUE: Color = Color {
+    r: 102,
+    g: 191,
+    b: 255,
+    a: 255,
+};
+pub const BLUE: Color = Color {
+    r: 0,
+    g: 121,
+    b: 241,
+    a: 255,
+};
+pub const DARKBLUE: Color = Color {
+    r: 0,
+    g: 82,
+    b: 172,
+    a: 255,
+};
+pub const PURPLE: Color = Color {
+    r: 200,
+    g: 122,
+    b: 255,
+    a: 255,
+};
+pub const VIOLET: Color = Color {
+    r: 135,
+    g: 60,
+    b: 190,
+    a: 255,
+};
+pub const DARKPURPLE: Color = Color {
+    r: 112,
+    g: 31,
+    b: 126,
+    a: 255,
+};
+pub const BEIGE: Color = Color {
+    r: 211,
+    g: 176,
+    b: 131,
+    a: 255,
+};
+pub const BROWN: Color = Color {
+    r: 127,
+    g: 106,
+    b: 79,
+    a: 255,
+};
+pub const DARKBROWN: Color = Color {
+    r: 76,
+    g: 63,
+    b: 47,
+    a: 255,
+};
+pub const WHITE: Color = Color {
+    r: 255,
+    g: 255,
+    b: 255,
+    a: 255,
+};
+pub const BLACK: Color = Color {
+    r: 0,
+    g: 0,
+    b: 0,
+    a: 255,
+};
+pub const BLANK: Color = Color {
+    r: 0,
+    g: 0,
+    b: 0,
+    a: 0,
+};
+pub const MAGENTA: Color = Color {
+    r: 255,
+    g: 0,
+    b: 255,
+    a: 255,
+};
+pub const RAYWHITE: Color = Color {
+    r: 245,
+    g: 245,
+    b: 245,
+    a: 255,
+};
